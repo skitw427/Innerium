@@ -203,46 +203,167 @@ const HomeScreen = ({ navigation }) => {
 };
 
 const SimpleDiagnosisScreen = () => {
-  const [messages, setMessages] = useState([
-    { id: '1', sender: 'bot', text: '안녕하세요! 오늘 기분은 어떤가요?' },
-  ]);
+  const makeId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
+  const GRID_HEIGHT = 240;
+
+  const [messages, setMessages] = useState([
+    { id: makeId(), sender: 'bot', text: '안녕하세요! 어떤 기분으로 하루를 보내셨나요?' },
+  ]);
+  const [degreeSelected, setDegreeSelected] = useState(false);
+  const [emotion, setEmotion] = useState('');
+  const [firstEmotion, setFirstEmotion] = useState('');
+  const [degree, setDegree] = useState(null);
+  const [thirdQuestion, setThirdQuestion] = useState(false);
+  const [availableEmotions, setAvailableEmotions] = useState([
+    '기쁨', '즐거움', '평온', '슬픔', '분노', '두려움', '갈망', '역겨움'
+  ]);
+  const [finished, setFinished] = useState(false);
   const flatListRef = useRef(null);
 
-  const handleOptionSelect = (option) => {
-    // 메시지를 추가한 후, 새로운 메시지가 추가된 후 스크롤을 맨 아래로 이동시킴
-    setMessages((prevMessages) => {
-      const newMessages = [
-        ...prevMessages,
-        { id: String(prevMessages.length + 1), sender: 'user', text: option },
-        { id: String(prevMessages.length + 2), sender: 'bot', text: '감사합니다! 추가 질문이 있습니다.' },
-      ];
-      return newMessages;
-    });
+  const filterAvailableEmotions = () =>
+    availableEmotions.filter(e => e !== firstEmotion);
 
-    // 새로운 메시지가 추가된 후, FlatList를 맨 아래로 스크롤
-    setTimeout(() => {
-      flatListRef.current.scrollToEnd({ animated: true });
-    }, 100);  // 메시지가 추가된 후 약간의 지연을 두어 스크롤 효과가 제대로 나타나게 함
+  const handleEmotionSelect = (option) => {
+    if (thirdQuestion) {
+      if (option === '없음') {
+        setMessages(prev => [
+          ...prev,
+          { id: makeId(), sender: 'user', text: option },
+          { id: makeId(), sender: 'bot', text: '결과가 나왔어요!' },
+        ]);
+        setFinished(true);
+        setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
+        return;
+      } else {
+        setEmotion(option);
+        setMessages(prev => [
+          ...prev,
+          { id: makeId(), sender: 'user', text: option },
+          { id: makeId(), sender: 'bot', text: '그 감정의 정도는 어땠나요?' },
+        ]);
+        setThirdQuestion(false);
+        setDegreeSelected(true);
+        setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
+        return;
+      }
+    }
+
+    if (!thirdQuestion) {
+      setEmotion(option);
+      setFirstEmotion(option);  // ✅ 첫 감정 저장
+      setMessages(prev => [
+        ...prev,
+        { id: makeId(), sender: 'user', text: option },
+        { id: makeId(), sender: 'bot', text: '그 감정의 정도는 어땠나요?' },
+      ]);
+      setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
+      setDegreeSelected(true);
+      return;
+    }    
+
+    setEmotion(option);
+    setMessages(prev => [
+      ...prev,
+      { id: makeId(), sender: 'user', text: option },
+      { id: makeId(), sender: 'bot', text: '그 감정의 정도는 어땠나요?' },
+    ]);
+    setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
+    setDegreeSelected(true);
   };
 
+  const handleDegreeSelect = (value) => {
+    setDegree(value);
+    setMessages(prev => [
+      ...prev,
+      { id: makeId(), sender: 'user', text: `${value}` },
+    ]);
+    setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
+
+    if (value >= 1 && value <= 7) {
+      setMessages(prev => [
+        ...prev,
+        { id: makeId(), sender: 'bot', text: '혹시 오늘 또 다른 감정을 느끼진 않으셨나요?' },
+      ]);
+      setThirdQuestion(true);
+      setDegreeSelected(false);
+    }
+  };
+
+  const handleRestart = () => {
+    setEmotion('');
+    setDegreeSelected(false);
+    setDegree(null);
+    setThirdQuestion(false);
+    setFinished(false);
+    setAvailableEmotions(['기쁨', '즐거움', '평온', '슬픔', '분노', '두려움', '갈망', '역겨움']);
+    setMessages([{ id: makeId(), sender: 'bot', text: '안녕하세요! 어떤 기분으로 하루를 보내셨나요?' }]);
+    setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
+  };
+
+  const handleSecondEmotionRestart = () => {
+    // 전체 대화 초기화
+    setEmotion('');
+    setDegree(null);
+    setDegreeSelected(false);
+    setThirdQuestion(false);
+    setFinished(false);
+
+    // 첫 번째 질문으로 돌아가도록 설정
+    setMessages([
+      { id: makeId(), sender: 'bot', text: '안녕하세요! 어떤 기분으로 하루를 보내셨나요?' },
+    ]);
+
+    // 감정 선택 목록도 초기화
+    setAvailableEmotions(['기쁨', '즐거움', '평온', '슬픔', '분노', '두려움', '갈망', '역겨움']);
+    
+    setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
+  };
+
+  const handleThirdEmotionRestart = () => {
+    setEmotion('');
+    setDegree(null);
+    setDegreeSelected(false);
+  };
+
+  const handleFourthEmotionRestart = () => {
+    setMessages(prev => {
+      // 1, 2번째 질문과 답변만 남기고 나머지 메시지 삭제
+      const firstTwoQuestions = prev.slice(0, 4);  // 첫 번째, 두 번째 질문과 답만 남긴다
+      return [
+        ...firstTwoQuestions,
+        { id: makeId(), sender: 'bot', text: '혹시 오늘 또 다른 감정을 느끼진 않으셨나요?' },
+      ];
+    });
+
+    setAvailableEmotions(prev => prev.filter(e => e !== firstEmotion)); // 첫 번째 감정 삭제
+    setEmotion('');
+    setDegree(null);
+    setDegreeSelected(false);
+    setThirdQuestion(true);
+    setFinished(false);
+
+    setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
+  };
+
+  const chunk2 = (arr) => {
+    const res = [];
+    for (let i = 0; i < arr.length; i += 2) {
+      res.push(arr.slice(i, i + 2));
+    }
+    return res;
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.topSpacing} />
 
-      {/* 채팅 영역 */}
       <FlatList
         ref={flatListRef}
         data={messages}
-        keyExtractor={(item) => item.id}
+        keyExtractor={item => item.id}
         renderItem={({ item }) => (
-          <View
-            style={[
-              styles.messageContainer,
-              item.sender === 'bot' ? styles.botMessage : styles.userMessage,
-            ]}
-          >
+          <View style={[styles.messageContainer, item.sender === 'bot' ? styles.botMessage : styles.userMessage]}>
             <Text style={styles.messageText}>{item.text}</Text>
           </View>
         )}
@@ -250,45 +371,108 @@ const SimpleDiagnosisScreen = () => {
         style={styles.chatList}
       />
 
-      {/* 객관식 선택지 */}
-      <View style={styles.optionsContainer}>
-        {/* 8개의 옵션 버튼을 4행 2열로 배치 */}
-        <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.optionButton} onPress={() => handleOptionSelect('기쁨')}>
-            <Text style={styles.optionText}>기쁨</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.optionButton} onPress={() => handleOptionSelect('즐거움')}>
-            <Text style={styles.optionText}>즐거움</Text>
-          </TouchableOpacity>
+      {!degreeSelected && !thirdQuestion && !finished && (
+        <View style={[styles.optionsContainer, { height: GRID_HEIGHT }]}>
+          {chunk2(['기쁨', '즐거움', '평온', '슬픔', '분노', '두려움', '갈망', '역겨움'])
+            .map((row, rowIndex) => (
+              <View style={styles.buttonRow} key={`r1-${rowIndex}`}>
+                {row.map((opt, colIndex) => (
+                  <TouchableOpacity
+                    key={`b1-${rowIndex}-${colIndex}`}
+                    style={styles.optionButton}
+                    onPress={() => handleEmotionSelect(opt)}
+                  >
+                    <Text style={styles.optionText}>{opt}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ))}
         </View>
+      )}
 
-        <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.optionButton} onPress={() => handleOptionSelect('평온')}>
-            <Text style={styles.optionText}>평온</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.optionButton} onPress={() => handleOptionSelect('슬픔')}>
-            <Text style={styles.optionText}>슬픔</Text>
-          </TouchableOpacity>
+      {degreeSelected && !thirdQuestion && !finished && (
+        <View style={[styles.optionsContainer, { height: GRID_HEIGHT }]}>
+          {chunk2([1, 2, 3, 4, 5, 6, 7, '다시'])
+            .map((row, rowIndex) => (
+              <View style={styles.buttonRow} key={`r2-${rowIndex}`}>
+                {row.map((item, colIndex) => (
+                  <TouchableOpacity
+                    key={`b2-${rowIndex}-${colIndex}`}
+                    style={styles.optionButton}
+                    onPress={() =>
+                      item === '다시'
+                        ? handleSecondEmotionRestart()  // 두 번째 질문에서 "다시" 눌렀을 때
+                        : handleDegreeSelect(item)
+                    }
+                  >
+                    <Text style={styles.optionText}>
+                      {item === '다시' ? '감정 다시 고르기' : item}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ))}
         </View>
+      )}
 
-        <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.optionButton} onPress={() => handleOptionSelect('분노')}>
-            <Text style={styles.optionText}>분노</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.optionButton} onPress={() => handleOptionSelect('두려움')}>
-            <Text style={styles.optionText}>두려움</Text>
-          </TouchableOpacity>
+      {thirdQuestion && !finished && !degreeSelected && (
+        <View style={[styles.optionsContainer, { height: GRID_HEIGHT }]}>
+          {chunk2([...filterAvailableEmotions(), '없음', '다시'])
+            .map((row, rowIndex) => (
+              <View style={styles.buttonRow} key={`r3-${rowIndex}`}>
+                {row.map((opt, colIndex) => (
+                  <TouchableOpacity
+                    key={`b3-${rowIndex}-${colIndex}`}
+                    style={styles.optionButton}
+                    onPress={() =>
+                      opt === '다시'
+                        ? handleThirdEmotionRestart()
+                        : handleEmotionSelect(opt)
+                    }
+                  >
+                    <Text style={styles.optionText}>
+                      {opt === '다시' ? '감정 다시 고르기' : opt}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ))}
         </View>
+      )}
 
-        <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.optionButton} onPress={() => handleOptionSelect('갈망')}>
-            <Text style={styles.optionText}>갈망</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.optionButton} onPress={() => handleOptionSelect('역겨움')}>
-            <Text style={styles.optionText}>역겨움</Text>
+      {finished && (
+        <View
+          style={[
+            styles.optionsContainer,
+            {
+              height: GRID_HEIGHT,
+              justifyContent: 'center',
+              alignItems: 'center',
+            },
+          ]}
+        >
+          <TouchableOpacity onPress={() => { /* 결과화면 네비게이트 */ }}>
+            <LinearGradient
+              colors={['#4CAF50', '#8BC34A']}
+              style={[
+                styles.optionButton,
+                {
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  width: 220,
+                  height: 70,
+                  borderWidth: 0,
+                  borderColor: 'transparent',
+                }
+              ]}
+            >
+              <Text style={[styles.dateChangeText, { fontSize: 20 }]}>
+                결과 보기
+              </Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
-      </View>
+      )}
     </SafeAreaView>
   );
 };
