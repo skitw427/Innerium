@@ -209,11 +209,13 @@ const SimpleDiagnosisScreen = () => {
   const [messages, setMessages] = useState([
     { id: makeId(), sender: 'bot', text: '안녕하세요! 어떤 기분으로 하루를 보내셨나요?' },
   ]);
-  const [degreeSelected, setDegreeSelected] = useState(false); // 현재 정도 선택 UI를 보여줄지 여부
-  const [emotion, setEmotion] = useState(''); // 가장 최근에 선택된 감정 (임시 저장용)
-  const [firstEmotion, setFirstEmotion] = useState(''); // 사용자가 선택한 첫 번째 감정
-  const [degree, setDegree] = useState(null); // 가장 최근에 선택된 감정 정도
-  const [askingSecondEmotion, setAskingSecondEmotion] = useState(false); // 두 번째 감정을 묻고 있는지 여부
+  const [degreeSelected, setDegreeSelected] = useState(false); // 현재 정도 선택 UI 표시 여부
+  const [emotion, setEmotion] = useState(''); // 가장 최근 선택된 감정 (임시 저장)
+  const [firstEmotion, setFirstEmotion] = useState(''); // 첫 번째 선택 감정
+  const [degree, setDegree] = useState(null); // 가장 최근 선택된 감정 정도
+  const [firstDegree, setFirstDegree] = useState(null); // 첫 번째 감정의 정도 저장 <-- NEW STATE
+  const [askingSecondEmotion, setAskingSecondEmotion] = useState(false); // 두 번째 감정 질문 여부
+  const [askingPriorityQuestion, setAskingPriorityQuestion] = useState(false); // 5번째 우선순위 질문 여부 <-- NEW STATE
   const [availableEmotions, setAvailableEmotions] = useState([
     '기쁨', '즐거움', '평온', '슬픔', '분노', '두려움', '갈망', '역겨움'
   ]);
@@ -225,7 +227,7 @@ const SimpleDiagnosisScreen = () => {
     if (flatListRef.current) {
       setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
     }
-  }, [messages]); // messages가 변경될 때마다 스크롤
+  }, [messages]);
 
   // 두 번째 감정 선택 시, 첫 번째 감정을 제외한 목록 반환
   const filterAvailableEmotions = () =>
@@ -233,6 +235,8 @@ const SimpleDiagnosisScreen = () => {
 
   // 감정 선택 처리
   const handleEmotionSelect = (option) => {
+    setAskingPriorityQuestion(false); // 다른 선택 시 우선순위 질문 상태 초기화
+
     // --- 두 번째 감정 선택 시 ---
     if (askingSecondEmotion) {
       if (option === '없음') {
@@ -242,8 +246,8 @@ const SimpleDiagnosisScreen = () => {
           { id: makeId(), sender: 'bot', text: '결과가 나왔어요!' },
         ]);
         setFinished(true);
-        setAskingSecondEmotion(false); // 상태 초기화
-        setDegreeSelected(false); // 상태 초기화
+        setAskingSecondEmotion(false);
+        setDegreeSelected(false);
       } else {
         setEmotion(option); // 현재 선택된 감정 업데이트 (두 번째 감정)
         setMessages(prev => [
@@ -251,10 +255,10 @@ const SimpleDiagnosisScreen = () => {
           { id: makeId(), sender: 'user', text: option },
           { id: makeId(), sender: 'bot', text: '그 감정의 정도는 어땠나요?' },
         ]);
-        // askingSecondEmotion은 true로 유지 (두 번째 감정의 정도를 물어야 함)
         setDegreeSelected(true); // 정도 선택 UI 표시
+        // askingSecondEmotion은 true로 유지
       }
-      return; // 함수 종료
+      return;
     }
 
     // --- 첫 번째 감정 선택 시 ---
@@ -266,7 +270,7 @@ const SimpleDiagnosisScreen = () => {
       { id: makeId(), sender: 'bot', text: '그 감정의 정도는 어땠나요?' },
     ]);
     setDegreeSelected(true); // 정도 선택 UI 표시
-    setAskingSecondEmotion(false); // 아직 첫 번째 감정 단계임
+    setAskingSecondEmotion(false);
   };
 
   // 감정 정도 선택 처리
@@ -280,16 +284,30 @@ const SimpleDiagnosisScreen = () => {
     if (value >= 1 && value <= 7) {
       // --- 두 번째 감정의 정도를 선택한 경우 ---
       if (askingSecondEmotion) {
-        setMessages(prev => [
-          ...prev,
-          { id: makeId(), sender: 'bot', text: '결과가 나왔어요!' },
-        ]);
-        setFinished(true);
-        setDegreeSelected(false); // 완료되었으므로 UI 숨김
-        setAskingSecondEmotion(false); // 상태 초기화
+        // !!! 새로운 로직: 첫 번째 정도와 두 번째 정도 비교 !!!
+        if (value === firstDegree) {
+          // 정도가 같으면 5번째 질문 시작
+          setMessages(prev => [
+            ...prev,
+            { id: makeId(), sender: 'bot', text: '두 감정 중 오늘 더 크게 느낀 감정은 무엇인가요?' },
+          ]);
+          setAskingPriorityQuestion(true); // 우선순위 질문 상태 활성화
+          setDegreeSelected(false); // 감정 선택 UI를 보여줘야 함
+          setAskingSecondEmotion(false); // 두 번째 감정 질문 단계 종료
+        } else {
+          // 정도가 다르면 바로 결과 표시
+          setMessages(prev => [
+            ...prev,
+            { id: makeId(), sender: 'bot', text: '결과가 나왔어요!' },
+          ]);
+          setFinished(true);
+          setDegreeSelected(false);
+          setAskingSecondEmotion(false);
+        }
       }
       // --- 첫 번째 감정의 정도를 선택한 경우 ---
       else {
+        setFirstDegree(value); // 첫 번째 감정의 정도 저장 <-- SAVE FIRST DEGREE
         setMessages(prev => [
           ...prev,
           { id: makeId(), sender: 'bot', text: '혹시 오늘 또 다른 감정을 느끼진 않으셨나요?' },
@@ -298,7 +316,19 @@ const SimpleDiagnosisScreen = () => {
         setDegreeSelected(false); // 감정 선택 UI 표시 위해 false로 변경
       }
     }
-    // '다시'는 버튼 핸들러에서 직접 처리하므로 여기서는 숫자만 처리
+    // '다시'는 버튼 핸들러에서 직접 처리
+  };
+
+  // 5번째 질문 (우선순위) 선택 처리 <-- NEW HANDLER
+  const handlePrioritySelect = (priorityEmotion) => {
+    setMessages(prev => [
+      ...prev,
+      { id: makeId(), sender: 'user', text: priorityEmotion },
+      { id: makeId(), sender: 'bot', text: '결과가 나왔어요!' },
+    ]);
+    setFinished(true);
+    setAskingPriorityQuestion(false); // 질문 완료
+    setDegreeSelected(false); // UI 숨김
   };
 
   // 대화 전체 초기화 (첫 번째 질문으로)
@@ -308,7 +338,9 @@ const SimpleDiagnosisScreen = () => {
     setEmotion('');
     setFirstEmotion('');
     setDegree(null);
+    setFirstDegree(null); // 초기화 추가
     setAskingSecondEmotion(false);
+    setAskingPriorityQuestion(false); // 초기화 추가
     setAvailableEmotions(['기쁨', '즐거움', '평온', '슬픔', '분노', '두려움', '갈망', '역겨움']);
     setFinished(false);
   };
@@ -316,52 +348,64 @@ const SimpleDiagnosisScreen = () => {
   // 세 번째 질문으로 돌아가기 (두 번째 감정 선택 단계로)
   const handleReturnToSecondEmotionChoice = () => {
     setMessages(prev => {
-      // 첫 번째 봇 질문, 사용자 첫 감정 선택, 봇 정도 질문, 사용자 첫 정도 선택 (총 4개) 메시지만 남김
-      const historyToKeep = prev.slice(0, 4);
+      const historyToKeep = prev.slice(0, 4); // 첫 봇 질문, 사용자 첫 감정, 봇 정도 질문, 사용자 첫 정도 선택
       return [
         ...historyToKeep,
         { id: makeId(), sender: 'bot', text: '혹시 오늘 또 다른 감정을 느끼진 않으셨나요?' }, // 두 번째 감정 질문 다시 추가
       ];
     });
+    setEmotion('');
+    setDegree(null);
+    // firstDegree는 유지되어야 함
+    setDegreeSelected(false);
+    setAskingSecondEmotion(true); // 두 번째 감정 묻는 상태로
+    setAskingPriorityQuestion(false); // 우선순위 질문 상태 해제
+    setFinished(false);
+  };
 
-    // 상태 초기화 및 조정
-    setEmotion(''); // 현재 선택된 감정 초기화
-    setDegree(null); // 현재 선택된 정도 초기화
-    setDegreeSelected(false); // 감정 선택 UI를 보여줘야 함
-    setAskingSecondEmotion(true); // 두 번째 감정을 묻는 상태로 설정
-    setFinished(false); // 완료 상태 해제
-    // availableEmotions는 firstEmotion 기준으로 이미 필터링 되어 있어야 함 (filterAvailableEmotions 사용)
+  // 5번째 질문에서 '다시' -> 4번째 질문(두 번째 감정 정도 선택)으로 돌아가기 <-- NEW HANDLER
+  const handleReturnToSecondDegreeChoice = () => {
+    setMessages(prev => {
+        // 봇 5번 질문, 사용자 2번 정도 응답 제거 -> 봇 4번 질문까지 남기기
+        // [봇1, 유저1(감정), 봇2(정도?), 유저2(정도), 봇3(다른감정?), 유저3(감정), 봇4(정도?)] <- 여기까지 (7개)
+        const historyToKeep = prev.slice(0, 7);
+        return [...historyToKeep];
+    });
+
+    // 상태 재설정: 4번째 질문(두 번째 감정 정도 묻기) 상태로
+    setAskingPriorityQuestion(false); // 우선순위 질문 상태 해제
+    setDegreeSelected(true);        // 정도 선택 UI 표시
+    setAskingSecondEmotion(true);     // 두 번째 감정 관련 상태 활성화
+    setFinished(false);             // 완료 상태 해제
+    // emotion (두번째 선택 감정), firstEmotion, firstDegree는 유지
+    setDegree(null);                // 현재 degree만 초기화
   };
 
 
-  // 배열을 주어진 크기로 나누는 함수
+  // 배열을 주어진 크기로 나누는 함수 (동일)
   const chunk = (arr, size) => {
     const res = [];
-    // 임시 배열 복사 (원본 변경 방지)
     const tempArr = [...arr];
-    // 빈 슬롯 채우기 (size 배수가 되도록)
-    while (tempArr.length % size !== 0 && size > 1) { // size 1일 경우 무한 루프 방지
-        tempArr.push(null); // null 또는 다른 플레이스홀더 사용 가능
+    while (tempArr.length % size !== 0 && size > 1) {
+        tempArr.push(null);
     }
-    // 나누기
     for (let i = 0; i < tempArr.length; i += size) {
       res.push(tempArr.slice(i, i + size));
     }
     return res;
   };
 
-  // 옵션 버튼 렌더링 함수
+  // 옵션 버튼 렌더링 함수 (동일)
   const renderOptionButtons = (options, onSelect, onRestart, keyPrefix) => {
-    // 버튼 레이아웃을 2x4 그리드로 만듭니다.
-    const chunkedOptions = chunk(options, 2); // 한 행에 2개씩
+    const chunkedOptions = chunk(options, 2);
 
     return (
       <View style={[styles.optionsContainer, { height: GRID_HEIGHT }]}>
         {chunkedOptions.map((row, rowIndex) => (
           <View style={styles.buttonRow} key={`${keyPrefix}-r-${rowIndex}`}>
             {row.map((opt, colIndex) => (
-              opt === null ? // 청크 나누기 위해 추가된 빈 슬롯 처리
-                <View style={styles.optionButton} key={`${keyPrefix}-b-${rowIndex}-empty`} /> // 빈 공간 렌더링
+              opt === null ?
+                <View style={styles.optionButton} key={`${keyPrefix}-b-${rowIndex}-empty-${colIndex}`} /> // key에 colIndex 추가
               :
               <TouchableOpacity
                 key={`${keyPrefix}-b-${rowIndex}-${colIndex}`}
@@ -399,46 +443,57 @@ const SimpleDiagnosisScreen = () => {
       {/* --- 옵션 버튼 영역 --- */}
 
       {/* 1. 첫 번째 감정 선택 */}
-      {!degreeSelected && !askingSecondEmotion && !finished && (
+      {!degreeSelected && !askingSecondEmotion && !askingPriorityQuestion && !finished && (
         renderOptionButtons(
           availableEmotions,
           handleEmotionSelect,
-          handleFullRestart, // 첫 단계에서는 '다시'가 없지만, 일관성을 위해 추가 (실제로는 렌더링 안될 것)
+          handleFullRestart, // 첫 단계 '다시'는 전체 다시 시작
           'emo1'
         )
       )}
 
       {/* 2. 첫 번째 감정의 정도 선택 */}
-      {degreeSelected && !askingSecondEmotion && !finished && (
+      {degreeSelected && !askingSecondEmotion && !askingPriorityQuestion && !finished && (
         renderOptionButtons(
           [1, 2, 3, 4, 5, 6, 7, '다시'],
           handleDegreeSelect,
-          handleFullRestart, // 두 번째 질문에서 '다시'는 전체 초기화
+          handleFullRestart, // 두 번째 질문 '다시'는 전체 다시 시작
           'deg1'
         )
       )}
 
       {/* 3. 두 번째 감정 선택 */}
-      {!degreeSelected && askingSecondEmotion && !finished && (
+      {!degreeSelected && askingSecondEmotion && !askingPriorityQuestion && !finished && (
          renderOptionButtons(
           [...filterAvailableEmotions(), '없음', '다시'],
           handleEmotionSelect,
-          handleReturnToSecondEmotionChoice, // 세 번째 질문에서 '다시'는 두 번째 감정 선택으로
+          handleReturnToSecondEmotionChoice, // 세 번째 질문 '다시'는 두 번째 감정 선택으로
           'emo2'
         )
       )}
 
        {/* 4. 두 번째 감정의 정도 선택 */}
-      {degreeSelected && askingSecondEmotion && !finished && (
+      {degreeSelected && askingSecondEmotion && !askingPriorityQuestion && !finished && (
          renderOptionButtons(
           [1, 2, 3, 4, 5, 6, 7, '다시'],
           handleDegreeSelect,
-          handleReturnToSecondEmotionChoice, // 네 번째 질문에서 '다시'도 두 번째 감정 선택으로
+          handleReturnToSecondEmotionChoice, // 네 번째 질문 '다시'도 두 번째 감정 선택으로
           'deg2'
         )
       )}
 
-      {/* 5. 진단 완료 */}
+      {/* 5. 우선순위 감정 선택 (새로운 단계) */}
+      {!degreeSelected && askingPriorityQuestion && !finished && (
+        renderOptionButtons(
+            [firstEmotion, emotion], // 첫 번째 감정과 두 번째 감정(현재 emotion 상태 값)
+            handlePrioritySelect,
+            handleReturnToSecondDegreeChoice, // 다섯 번째 질문 '다시'는 네 번째 질문(두 번째 감정 정도 선택)으로
+            'priority'
+        )
+      )}
+
+
+      {/* 6. 진단 완료 */}
       {finished && (
         <View
           style={[
@@ -454,13 +509,13 @@ const SimpleDiagnosisScreen = () => {
             <LinearGradient
               colors={['#4CAF50', '#8BC34A']} // 예시 색상
               style={[
-                styles.optionButton, // 기존 버튼 스타일 재활용 또는 새 스타일
+                styles.optionButton,
                 {
                   justifyContent: 'center',
                   alignItems: 'center',
-                  width: 220, // 버튼 크기 조절
+                  width: 220,
                   height: 70,
-                  borderWidth: 0, // 테두리 제거
+                  borderWidth: 0,
                 }
               ]}
             >
