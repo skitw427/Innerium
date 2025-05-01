@@ -204,28 +204,37 @@ const HomeScreen = ({ navigation }) => {
 
 const SimpleDiagnosisScreen = () => {
   const makeId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-
-  const GRID_HEIGHT = 240;
+  const GRID_HEIGHT = 240; // 옵션 영역 높이
 
   const [messages, setMessages] = useState([
     { id: makeId(), sender: 'bot', text: '안녕하세요! 어떤 기분으로 하루를 보내셨나요?' },
   ]);
-  const [degreeSelected, setDegreeSelected] = useState(false);
-  const [emotion, setEmotion] = useState('');
-  const [firstEmotion, setFirstEmotion] = useState('');
-  const [degree, setDegree] = useState(null);
-  const [thirdQuestion, setThirdQuestion] = useState(false);
+  const [degreeSelected, setDegreeSelected] = useState(false); // 현재 정도 선택 UI를 보여줄지 여부
+  const [emotion, setEmotion] = useState(''); // 가장 최근에 선택된 감정 (임시 저장용)
+  const [firstEmotion, setFirstEmotion] = useState(''); // 사용자가 선택한 첫 번째 감정
+  const [degree, setDegree] = useState(null); // 가장 최근에 선택된 감정 정도
+  const [askingSecondEmotion, setAskingSecondEmotion] = useState(false); // 두 번째 감정을 묻고 있는지 여부
   const [availableEmotions, setAvailableEmotions] = useState([
     '기쁨', '즐거움', '평온', '슬픔', '분노', '두려움', '갈망', '역겨움'
   ]);
-  const [finished, setFinished] = useState(false);
+  const [finished, setFinished] = useState(false); // 진단 완료 여부
   const flatListRef = useRef(null);
 
+  // 스크롤 자동 이동
+  useEffect(() => {
+    if (flatListRef.current) {
+      setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
+    }
+  }, [messages]); // messages가 변경될 때마다 스크롤
+
+  // 두 번째 감정 선택 시, 첫 번째 감정을 제외한 목록 반환
   const filterAvailableEmotions = () =>
     availableEmotions.filter(e => e !== firstEmotion);
 
+  // 감정 선택 처리
   const handleEmotionSelect = (option) => {
-    if (thirdQuestion) {
+    // --- 두 번째 감정 선택 시 ---
+    if (askingSecondEmotion) {
       if (option === '없음') {
         setMessages(prev => [
           ...prev,
@@ -233,126 +242,142 @@ const SimpleDiagnosisScreen = () => {
           { id: makeId(), sender: 'bot', text: '결과가 나왔어요!' },
         ]);
         setFinished(true);
-        setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
-        return;
+        setAskingSecondEmotion(false); // 상태 초기화
+        setDegreeSelected(false); // 상태 초기화
       } else {
-        setEmotion(option);
+        setEmotion(option); // 현재 선택된 감정 업데이트 (두 번째 감정)
         setMessages(prev => [
           ...prev,
           { id: makeId(), sender: 'user', text: option },
           { id: makeId(), sender: 'bot', text: '그 감정의 정도는 어땠나요?' },
         ]);
-        setThirdQuestion(false);
-        setDegreeSelected(true);
-        setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
-        return;
+        // askingSecondEmotion은 true로 유지 (두 번째 감정의 정도를 물어야 함)
+        setDegreeSelected(true); // 정도 선택 UI 표시
       }
+      return; // 함수 종료
     }
 
-    if (!thirdQuestion) {
-      setEmotion(option);
-      setFirstEmotion(option);  // ✅ 첫 감정 저장
-      setMessages(prev => [
-        ...prev,
-        { id: makeId(), sender: 'user', text: option },
-        { id: makeId(), sender: 'bot', text: '그 감정의 정도는 어땠나요?' },
-      ]);
-      setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
-      setDegreeSelected(true);
-      return;
-    }    
-
+    // --- 첫 번째 감정 선택 시 ---
     setEmotion(option);
+    setFirstEmotion(option); // 첫 번째 감정 저장
     setMessages(prev => [
       ...prev,
       { id: makeId(), sender: 'user', text: option },
       { id: makeId(), sender: 'bot', text: '그 감정의 정도는 어땠나요?' },
     ]);
-    setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
-    setDegreeSelected(true);
+    setDegreeSelected(true); // 정도 선택 UI 표시
+    setAskingSecondEmotion(false); // 아직 첫 번째 감정 단계임
   };
 
+  // 감정 정도 선택 처리
   const handleDegreeSelect = (value) => {
-    setDegree(value);
+    setDegree(value); // 현재 선택된 정도 업데이트
     setMessages(prev => [
       ...prev,
       { id: makeId(), sender: 'user', text: `${value}` },
     ]);
-    setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
 
     if (value >= 1 && value <= 7) {
-      setMessages(prev => [
-        ...prev,
-        { id: makeId(), sender: 'bot', text: '혹시 오늘 또 다른 감정을 느끼진 않으셨나요?' },
-      ]);
-      setThirdQuestion(true);
-      setDegreeSelected(false);
+      // --- 두 번째 감정의 정도를 선택한 경우 ---
+      if (askingSecondEmotion) {
+        setMessages(prev => [
+          ...prev,
+          { id: makeId(), sender: 'bot', text: '결과가 나왔어요!' },
+        ]);
+        setFinished(true);
+        setDegreeSelected(false); // 완료되었으므로 UI 숨김
+        setAskingSecondEmotion(false); // 상태 초기화
+      }
+      // --- 첫 번째 감정의 정도를 선택한 경우 ---
+      else {
+        setMessages(prev => [
+          ...prev,
+          { id: makeId(), sender: 'bot', text: '혹시 오늘 또 다른 감정을 느끼진 않으셨나요?' },
+        ]);
+        setAskingSecondEmotion(true); // 이제 두 번째 감정을 물을 차례
+        setDegreeSelected(false); // 감정 선택 UI 표시 위해 false로 변경
+      }
     }
+    // '다시'는 버튼 핸들러에서 직접 처리하므로 여기서는 숫자만 처리
   };
 
-  const handleRestart = () => {
-    setEmotion('');
-    setDegreeSelected(false);
-    setDegree(null);
-    setThirdQuestion(false);
-    setFinished(false);
-    setAvailableEmotions(['기쁨', '즐거움', '평온', '슬픔', '분노', '두려움', '갈망', '역겨움']);
+  // 대화 전체 초기화 (첫 번째 질문으로)
+  const handleFullRestart = () => {
     setMessages([{ id: makeId(), sender: 'bot', text: '안녕하세요! 어떤 기분으로 하루를 보내셨나요?' }]);
-    setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
-  };
-
-  const handleSecondEmotionRestart = () => {
-    // 전체 대화 초기화
-    setEmotion('');
-    setDegree(null);
     setDegreeSelected(false);
-    setThirdQuestion(false);
-    setFinished(false);
-
-    // 첫 번째 질문으로 돌아가도록 설정
-    setMessages([
-      { id: makeId(), sender: 'bot', text: '안녕하세요! 어떤 기분으로 하루를 보내셨나요?' },
-    ]);
-
-    // 감정 선택 목록도 초기화
+    setEmotion('');
+    setFirstEmotion('');
+    setDegree(null);
+    setAskingSecondEmotion(false);
     setAvailableEmotions(['기쁨', '즐거움', '평온', '슬픔', '분노', '두려움', '갈망', '역겨움']);
-    
-    setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
+    setFinished(false);
   };
 
-  const handleThirdEmotionRestart = () => {
-    setEmotion('');
-    setDegree(null);
-    setDegreeSelected(false);
-  };
-
-  const handleFourthEmotionRestart = () => {
+  // 세 번째 질문으로 돌아가기 (두 번째 감정 선택 단계로)
+  const handleReturnToSecondEmotionChoice = () => {
     setMessages(prev => {
-      // 1, 2번째 질문과 답변만 남기고 나머지 메시지 삭제
-      const firstTwoQuestions = prev.slice(0, 4);  // 첫 번째, 두 번째 질문과 답만 남긴다
+      // 첫 번째 봇 질문, 사용자 첫 감정 선택, 봇 정도 질문, 사용자 첫 정도 선택 (총 4개) 메시지만 남김
+      const historyToKeep = prev.slice(0, 4);
       return [
-        ...firstTwoQuestions,
-        { id: makeId(), sender: 'bot', text: '혹시 오늘 또 다른 감정을 느끼진 않으셨나요?' },
+        ...historyToKeep,
+        { id: makeId(), sender: 'bot', text: '혹시 오늘 또 다른 감정을 느끼진 않으셨나요?' }, // 두 번째 감정 질문 다시 추가
       ];
     });
 
-    setAvailableEmotions(prev => prev.filter(e => e !== firstEmotion)); // 첫 번째 감정 삭제
-    setEmotion('');
-    setDegree(null);
-    setDegreeSelected(false);
-    setThirdQuestion(true);
-    setFinished(false);
-
-    setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
+    // 상태 초기화 및 조정
+    setEmotion(''); // 현재 선택된 감정 초기화
+    setDegree(null); // 현재 선택된 정도 초기화
+    setDegreeSelected(false); // 감정 선택 UI를 보여줘야 함
+    setAskingSecondEmotion(true); // 두 번째 감정을 묻는 상태로 설정
+    setFinished(false); // 완료 상태 해제
+    // availableEmotions는 firstEmotion 기준으로 이미 필터링 되어 있어야 함 (filterAvailableEmotions 사용)
   };
 
-  const chunk2 = (arr) => {
+
+  // 배열을 주어진 크기로 나누는 함수
+  const chunk = (arr, size) => {
     const res = [];
-    for (let i = 0; i < arr.length; i += 2) {
-      res.push(arr.slice(i, i + 2));
+    // 임시 배열 복사 (원본 변경 방지)
+    const tempArr = [...arr];
+    // 빈 슬롯 채우기 (size 배수가 되도록)
+    while (tempArr.length % size !== 0 && size > 1) { // size 1일 경우 무한 루프 방지
+        tempArr.push(null); // null 또는 다른 플레이스홀더 사용 가능
+    }
+    // 나누기
+    for (let i = 0; i < tempArr.length; i += size) {
+      res.push(tempArr.slice(i, i + size));
     }
     return res;
   };
+
+  // 옵션 버튼 렌더링 함수
+  const renderOptionButtons = (options, onSelect, onRestart, keyPrefix) => {
+    // 버튼 레이아웃을 2x4 그리드로 만듭니다.
+    const chunkedOptions = chunk(options, 2); // 한 행에 2개씩
+
+    return (
+      <View style={[styles.optionsContainer, { height: GRID_HEIGHT }]}>
+        {chunkedOptions.map((row, rowIndex) => (
+          <View style={styles.buttonRow} key={`${keyPrefix}-r-${rowIndex}`}>
+            {row.map((opt, colIndex) => (
+              opt === null ? // 청크 나누기 위해 추가된 빈 슬롯 처리
+                <View style={styles.optionButton} key={`${keyPrefix}-b-${rowIndex}-empty`} /> // 빈 공간 렌더링
+              :
+              <TouchableOpacity
+                key={`${keyPrefix}-b-${rowIndex}-${colIndex}`}
+                style={styles.optionButton}
+                onPress={() => opt === '다시' ? onRestart() : onSelect(opt)}
+              >
+                <Text style={styles.optionText}>
+                  {opt === '다시' ? '다시 선택' : opt}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ))}
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -371,75 +396,49 @@ const SimpleDiagnosisScreen = () => {
         style={styles.chatList}
       />
 
-      {!degreeSelected && !thirdQuestion && !finished && (
-        <View style={[styles.optionsContainer, { height: GRID_HEIGHT }]}>
-          {chunk2(['기쁨', '즐거움', '평온', '슬픔', '분노', '두려움', '갈망', '역겨움'])
-            .map((row, rowIndex) => (
-              <View style={styles.buttonRow} key={`r1-${rowIndex}`}>
-                {row.map((opt, colIndex) => (
-                  <TouchableOpacity
-                    key={`b1-${rowIndex}-${colIndex}`}
-                    style={styles.optionButton}
-                    onPress={() => handleEmotionSelect(opt)}
-                  >
-                    <Text style={styles.optionText}>{opt}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ))}
-        </View>
+      {/* --- 옵션 버튼 영역 --- */}
+
+      {/* 1. 첫 번째 감정 선택 */}
+      {!degreeSelected && !askingSecondEmotion && !finished && (
+        renderOptionButtons(
+          availableEmotions,
+          handleEmotionSelect,
+          handleFullRestart, // 첫 단계에서는 '다시'가 없지만, 일관성을 위해 추가 (실제로는 렌더링 안될 것)
+          'emo1'
+        )
       )}
 
-      {degreeSelected && !thirdQuestion && !finished && (
-        <View style={[styles.optionsContainer, { height: GRID_HEIGHT }]}>
-          {chunk2([1, 2, 3, 4, 5, 6, 7, '다시'])
-            .map((row, rowIndex) => (
-              <View style={styles.buttonRow} key={`r2-${rowIndex}`}>
-                {row.map((item, colIndex) => (
-                  <TouchableOpacity
-                    key={`b2-${rowIndex}-${colIndex}`}
-                    style={styles.optionButton}
-                    onPress={() =>
-                      item === '다시'
-                        ? handleSecondEmotionRestart()  // 두 번째 질문에서 "다시" 눌렀을 때
-                        : handleDegreeSelect(item)
-                    }
-                  >
-                    <Text style={styles.optionText}>
-                      {item === '다시' ? '감정 다시 고르기' : item}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ))}
-        </View>
+      {/* 2. 첫 번째 감정의 정도 선택 */}
+      {degreeSelected && !askingSecondEmotion && !finished && (
+        renderOptionButtons(
+          [1, 2, 3, 4, 5, 6, 7, '다시'],
+          handleDegreeSelect,
+          handleFullRestart, // 두 번째 질문에서 '다시'는 전체 초기화
+          'deg1'
+        )
       )}
 
-      {thirdQuestion && !finished && !degreeSelected && (
-        <View style={[styles.optionsContainer, { height: GRID_HEIGHT }]}>
-          {chunk2([...filterAvailableEmotions(), '없음', '다시'])
-            .map((row, rowIndex) => (
-              <View style={styles.buttonRow} key={`r3-${rowIndex}`}>
-                {row.map((opt, colIndex) => (
-                  <TouchableOpacity
-                    key={`b3-${rowIndex}-${colIndex}`}
-                    style={styles.optionButton}
-                    onPress={() =>
-                      opt === '다시'
-                        ? handleThirdEmotionRestart()
-                        : handleEmotionSelect(opt)
-                    }
-                  >
-                    <Text style={styles.optionText}>
-                      {opt === '다시' ? '감정 다시 고르기' : opt}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ))}
-        </View>
+      {/* 3. 두 번째 감정 선택 */}
+      {!degreeSelected && askingSecondEmotion && !finished && (
+         renderOptionButtons(
+          [...filterAvailableEmotions(), '없음', '다시'],
+          handleEmotionSelect,
+          handleReturnToSecondEmotionChoice, // 세 번째 질문에서 '다시'는 두 번째 감정 선택으로
+          'emo2'
+        )
       )}
 
+       {/* 4. 두 번째 감정의 정도 선택 */}
+      {degreeSelected && askingSecondEmotion && !finished && (
+         renderOptionButtons(
+          [1, 2, 3, 4, 5, 6, 7, '다시'],
+          handleDegreeSelect,
+          handleReturnToSecondEmotionChoice, // 네 번째 질문에서 '다시'도 두 번째 감정 선택으로
+          'deg2'
+        )
+      )}
+
+      {/* 5. 진단 완료 */}
       {finished && (
         <View
           style={[
@@ -451,18 +450,17 @@ const SimpleDiagnosisScreen = () => {
             },
           ]}
         >
-          <TouchableOpacity onPress={() => { /* 결과화면 네비게이트 */ }}>
+          <TouchableOpacity onPress={() => { console.log("결과 보기 화면으로 이동"); /* 결과화면 네비게이트 */ }}>
             <LinearGradient
-              colors={['#4CAF50', '#8BC34A']}
+              colors={['#4CAF50', '#8BC34A']} // 예시 색상
               style={[
-                styles.optionButton,
+                styles.optionButton, // 기존 버튼 스타일 재활용 또는 새 스타일
                 {
                   justifyContent: 'center',
                   alignItems: 'center',
-                  width: 220,
+                  width: 220, // 버튼 크기 조절
                   height: 70,
-                  borderWidth: 0,
-                  borderColor: 'transparent',
+                  borderWidth: 0, // 테두리 제거
                 }
               ]}
             >
