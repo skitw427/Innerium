@@ -407,8 +407,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15, // 좌우 패딩
     paddingTop: 10,        // 상단 패딩
     paddingBottom: Platform.OS === 'ios' ? 25 : 15, // 하단 패딩 (iOS 노치 고려)
-    borderTopWidth: 1,     // 상단 구분선
-    borderTopColor: '#e0e0e0',
     backgroundColor: '#eef7ff', // 배경색
     justifyContent: 'center', // 내부 행들을 수직 중앙 정렬 (특히 우선순위 단계)
     // height: GRID_HEIGHT, // 고정 높이 적용됨 (렌더링 부분에서)
