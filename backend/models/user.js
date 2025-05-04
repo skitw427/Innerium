@@ -43,7 +43,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     provider_user_id: {
       type: DataTypes.STRING[255],
-      allowNull: false
+      allowNull: true
     },
     email: {
       type: DataTypes.STRING,
