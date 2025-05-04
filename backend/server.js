@@ -2,7 +2,7 @@
 require('dotenv').config(); // .env 로드 (DB 연결 외 다른 환경변수 사용 시 필요)
 
 const express = require('express');
-const pool = require('./db'); // 5단계에서 만든 db.js 파일 가져오기
+const pool = require('./config/db'); // 5단계에서 만든 db.js 파일 가져오기
 
 const app = express();
 const port = process.env.PORT || 3000; // 포트 설정 (환경 변수 또는 기본값 3000)
@@ -27,5 +27,5 @@ app.get('/users', async (req, res) => {
 
 // 서버 시작
 app.listen(port, () => {
-  console.log('서버가 http://localhost:${port} 에서 실행 중입니다.', port);
+  console.log(`서버가 http://localhost:${port} 에서 실행 중입니다.`);
 });
