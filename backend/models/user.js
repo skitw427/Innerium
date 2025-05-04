@@ -37,12 +37,12 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false
     },
     auth_provider: {
-      type: DataTypes.STRING[50],
+      type: DataTypes.STRING(50),
       allowNull: false,
       defaultValue: 'guest'
     },
     provider_user_id: {
-      type: DataTypes.STRING[255],
+      type: DataTypes.STRING(255),
       allowNull: true
     },
     email: {
@@ -54,7 +54,7 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: false
     },
     fcm_token: {
-      type: DataTypes.STRING[255],
+      type: DataTypes.STRING(255),
     },
     role: {
       type: DataTypes.STRING,
