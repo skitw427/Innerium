@@ -204,7 +204,7 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
     setAskingPriorityQuestion(false); setFinished(false);
    };
 
-  // --- ★★★ 수정된 결과 처리 함수 (emotionKey 전달 추가) ★★★ ---
+  // --- ★★★ 수정된 결과 처리 함수 (Navigate 방식 변경) ★★★ ---
   const handleViewResult = () => {
     // 1. 상태값에서 최종 결과 추출 및 주요 감정 결정
     let finalFirstEmotion = firstEmotion;
@@ -245,12 +245,16 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
     // const saveResult = async () => { /* ... API 호출 ... */ };
     // await saveResult();
 
-    // --- ★★★ Home 화면으로 이동하며 메시지와 '이미지 키' 전달 ★★★ ---
-    console.log("Navigating to Home with message and emotion key:", resultAlertMessage, emotionKey);
-    navigation.navigate('Home', {
-      diagnosisResult: resultAlertMessage,
-      emotionKey: emotionKey // <<< 이미지 키 전달 >>>
+    // --- ★★★ Home 화면으로 이동 방식 수정 ★★★ ---
+    console.log("Navigating to MainTabs > Home with message and key:", resultAlertMessage, emotionKey);
+    navigation.navigate('MainTabs', { // <<< 1. 탭 그룹('MainTabs')으로 이동
+      screen: 'Home',                // <<< 2. 그 안의 'Home' 화면으로 이동
+      params: {                      // <<< 3. 파라미터 전달
+        diagnosisResult: resultAlertMessage,
+        emotionKey: emotionKey
+      }
     });
+    // --- ---
   };
 
   // --- UI 렌더링 ---
@@ -262,10 +266,7 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
         keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
       >
         <View style={styles.outerContainer}>
-          {/* 상단 여백 */}
           <View style={styles.topSpacing} />
-
-          {/* 채팅 메시지 목록 */}
           <View style={styles.chatListContainer}>
             <FlatList
               ref={flatListRef}
@@ -281,8 +282,6 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
               contentContainerStyle={styles.chatContainer}
             />
           </View>
-
-          {/* --- 옵션 버튼 영역 --- */}
           {!finished && (
             <>
               {!degreeSelected && !askingSecondEmotion && !askingPriorityQuestion && (
@@ -302,8 +301,6 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
               )}
             </>
           )}
-
-          {/* 결과 보기 버튼 */}
           {finished && (
             <View style={[styles.optionsContainer, styles.resultButtonContainer, { height: GRID_HEIGHT }]}>
               <TouchableOpacity onPress={handleViewResult}>

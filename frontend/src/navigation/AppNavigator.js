@@ -1,43 +1,67 @@
 // src/navigation/AppNavigator.js
 import React from 'react';
-// Stack 네비게이터 생성을 위한 함수 import
 import { createStackNavigator } from '@react-navigation/stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'; // 탭 네비게이터 import
 
-// 분리된 각 화면 컴포넌트들을 import 합니다. 경로는 실제 파일 위치에 맞게 조정하세요.
+// --- 화면 컴포넌트 Import ---
 import HomeScreen from '../screens/HomeScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import StorageScreen from '../screens/StorageScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import SimpleDiagnosisScreen from '../screens/SimpleDiagnosisScreen';
 
-// Stack 네비게이터 인스턴스 생성
-const Stack = createStackNavigator();
+// --- 아이콘 사용 시 필요한 import (예시) ---
+// import Ionicons from 'react-native-vector-icons/Ionicons';
 
-// 앱의 네비게이션 구조를 정의하는 컴포넌트
+// --- 네비게이터 인스턴스 생성 ---
+const Stack = createStackNavigator();
+const Tab = createBottomTabNavigator();
+
+// --- 하단 탭 네비게이터를 렌더링하는 컴포넌트 ---
+const MainTabs = () => {
+  return (
+    <Tab.Navigator
+      // --- 탭 네비게이터 옵션 ---
+      screenOptions={{
+        unmountOnBlur: false, // 상태 유지를 위해 false
+        headerShown: false,   // 탭 내 화면들의 헤더 숨김
+        // --- ★★★ 기본 탭 바 UI 숨기기 ★★★ ---
+        tabBarStyle: { display: 'none' },
+        // ------------------------------------
+        // 아이콘/레이블 설정은 이제 사용되지 않으므로 주석 처리 또는 삭제 가능
+        // tabBarIcon: ({ focused, color, size }) => { /* ... 아이콘 로직 ... */ },
+        // tabBarActiveTintColor: 'tomato',
+        // tabBarInactiveTintColor: 'gray',
+      }}
+      // --- 뒤로가기 버튼 동작 ---
+      backBehavior="initialRoute"
+    >
+      {/* --- 탭 화면 정의 (컴포넌트는 여전히 필요) --- */}
+      {/* 이름(name)은 navigation.navigate 호출 시 사용됩니다. */}
+      <Tab.Screen name="Home" component={HomeScreen} options={{ title: '홈' }} />
+      <Tab.Screen name="Calendar" component={CalendarScreen} options={{ title: '캘린더' }} />
+      <Tab.Screen name="Storage" component={StorageScreen} options={{ title: '보관함' }} />
+      <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: '설정' }} />
+    </Tab.Navigator>
+  );
+};
+
+// --- 앱의 전체 네비게이션 구조 (StackNavigator) ---
 const AppNavigator = () => {
   return (
-    // Stack.Navigator가 네비게이션 스택을 관리합니다.
     <Stack.Navigator
-      // initialRouteName: 앱 시작 시 보여줄 첫 화면의 이름
-      initialRouteName="Home"
-      // screenOptions: 모든 화면에 공통으로 적용될 옵션
+      initialRouteName="MainTabs"
       screenOptions={{
-        headerShown: false, // 모든 화면에서 헤더(상단 제목 표시줄) 숨김
+        headerShown: false,
       }}
     >
-      {/* 각 화면을 Stack.Screen 컴포넌트로 등록합니다. */}
-      {/* name: 화면을 식별하는 고유한 이름 (navigation.navigate에서 사용) */}
-      {/* component: 해당 이름과 매칭될 화면 컴포넌트 */}
-      <Stack.Screen name="Home" component={HomeScreen} />
-      <Stack.Screen name="Calendar" component={CalendarScreen} />
-      <Stack.Screen name="Storage" component={StorageScreen} />
-      <Stack.Screen name="Settings" component={SettingsScreen} />
+      {/* 메인 하단 탭 네비게이터 그룹 */}
+      <Stack.Screen name="MainTabs" component={MainTabs} />
+      {/* 탭 바깥 화면 */}
       <Stack.Screen name="SimpleDiagnosis" component={SimpleDiagnosisScreen} />
-      {/* 필요하다면 다른 화면들도 여기에 추가 */}
-      {/* 예: <Stack.Screen name="Result" component={ResultScreen} /> */}
+      {/* 다른 스택 화면들... */}
     </Stack.Navigator>
   );
 };
 
-// AppNavigator 컴포넌트를 export하여 App.js에서 사용할 수 있게 합니다.
 export default AppNavigator;
