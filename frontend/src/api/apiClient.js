@@ -134,33 +134,91 @@ apiClient.interceptors.response.use(
 // JSDoc 주석은 함수의 역할과 반환 타입을 명시하여 코드 가독성을 높입니다. (TypeScript 사용 시 더 강력)
 
 /**
- * 게스트 사용자 생성
+/**
+ * 게스트 사용자 생성 (수정됨)
  * [POST] /auth/guest
- * @returns {Promise<import("axios").AxiosResponse<{accessToken: string}>>} GuestResDTO 포함 응답
+ * 요청 본문: { access_token: string, provider_user_id: string }
+ * @param {object} guestData - 게스트 사용자 생성을 위한 데이터.
+ * @param {string} guestData.access_token - (예: 소셜 로그인 후 받은) 액세스 토큰. API 명세서에 따라 'Bearer ' 접두사 없이 토큰 값 자체를 전달해야 할 수 있습니다.
+ * @param {string} guestData.provider_user_id - (예: 소셜 로그인 후 받은) 프로바이더 사용자 ID.
+ * @returns {Promise<import("axios").AxiosResponse<{accessToken: string}>>} GuestResDTO (또는 실제 응답 DTO) 포함 응답.
+ *          (응답 DTO는 기존 정의를 따르거나, 새 명세서에 따라 변경될 수 있습니다.)
  */
-export const createGuestUser = () => {
-  return apiClient.post('/auth/guest');
+export const createGuestUser = (guestData) => {
+  // guestData는 { access_token: "...", provider_user_id: "..." } 형태의 객체여야 합니다.
+  return apiClient.post('/auth/guest', guestData);
 };
 
 /**
  * 소셜 로그인
  * [POST] /auth/login
- * 요청 헤더: Authorization: Bearer <guest_token>  (★★★ 중요: guest_token 필요 ★★★)
- * 요청 본문(UserLoginReqDTO): { provider: string, id_token: string }
- * 성공 응답 본문: (아직 미정 - 실제 AuthResDTO 확인 필요)
- * @param {object} loginData - 로그인 요청 데이터. 예: { provider: 'google', id_token: '...' }
- * @param {string} guestToken - /auth/guest 를 통해 얻은 게스트 액세스 토큰
- * @returns {Promise<import("axios").AxiosResponse<any>>} // 실제 로그인 성공 응답 DTO 타입 정의 권장
+ * 요청 헤더: Authorization: Bearer <guest_token> (게스트 인증 토큰 필요)
+ * 요청 본문: { provider: string, id_token: string }
+ * 성공 응답 본문: { provider_user_id: string, access_token: string, is_new_user: boolean }
+ * @param {object} loginData - 로그인 요청 데이터.
+ * @param {string} loginData.provider - 소셜 로그인 제공자 (예: 'google').
+ * @param {string} loginData.id_token - 소셜 로그인 제공자로부터 받은 ID 토큰.
+ * @param {string} guestToken - /auth/guest 등을 통해 얻은 게스트 세션의 액세스 토큰.
+ * @returns {Promise<import("axios").AxiosResponse<{provider_user_id: string, access_token: string, is_new_user: boolean}>>} 로그인 성공 시 provider_user_id, 새로운 액세스 토큰(사용자용), 신규 사용자 여부 포함 응답
  */
 export const socialLogin = (loginData, guestToken) => {
-    // 이 요청은 특별히 guestToken을 헤더에 직접 설정해야 합니다.
-    // apiClient.post의 세 번째 인자로 config 객체를 전달하여 헤더를 추가/수정합니다.
-    return apiClient.post('/auth/login', loginData, {
+  // loginData는 { provider: "google", id_token: "..." } 형태의 객체여야 합니다.
+  // guestToken은 문자열 형태의 게스트 액세스 토큰입니다.
+
+  // 이 요청은 특별히 guestToken을 헤더에 직접 설정해야 합니다.
+  // apiClient.post의 세 번째 인자로 config 객체를 전달하여 헤더를 추가/수정합니다.
+  return apiClient.post('/auth/login', loginData, {
+    headers: {
+      // 기존 헤더에 추가되거나, Authorization 헤더가 있다면 이 값으로 덮어씁니다.
+      'Authorization': `Bearer ${guestToken}`
+    }
+  });
+};
+
+/**
+ * 사용자 인증 토큰 발급 (게스트 토큰 필요로 가정)
+ * [POST] /auth/token  (★★★ 중요: 실제 API 경로 및 메소드 확인 필요 ★★★)
+ * 요청 헤더: Authorization: Bearer <guest_token> (가정)
+ * 요청 본문: { provider_user_id: string }
+ * 성공 응답 본문: { provider_user_id: string, access_token: string } (access_token은 사용자 인증 토큰)
+ *
+ * 참고:
+ * - 이 API를 호출하기 전에, `/auth/guest` 등을 통해 `provider_user_id`와 `guest_token`을 확보해야 합니다.
+ * - `provider_user_id`가 없는 경우, 먼저 게스트 사용자 생성 API를 호출하여 `provider_user_id`를 발급받아야 합니다.
+ *
+ * @param {string} providerUserId - 사용자 식별자 (예: 게스트 세션에서 얻은 ID).
+ * @param {string} guestToken - 현재 유효한 게스트 액세스 토큰. (이 API가 게스트 토큰을 요구한다고 가정)
+ * @returns {Promise<import("axios").AxiosResponse<{provider_user_id: string, access_token: string}>>} provider_user_id와 새로운 사용자 액세스 토큰(Bearer)을 포함한 응답.
+ */
+export const issueUserToken = (providerUserId, guestToken) => {
+  // 필수 파라미터 체크 (개발 편의성)
+  if (!providerUserId) {
+    const errorMessage = 'issueUserToken: providerUserId는 필수입니다.';
+    console.error(`🚨 ${errorMessage}`);
+    return Promise.reject(new Error(errorMessage)); // 에러를 반환하여 호출부에서 처리하도록 함
+  }
+  if (!guestToken) {
+    // 이 API가 게스트 토큰을 요구한다는 가정 하에 경고/에러 처리
+    const errorMessage = 'issueUserToken: guestToken은 필수입니다. (API가 게스트 토큰을 요구한다고 가정)';
+    console.warn(`⚠️ ${errorMessage}`);
+    // 실제 운영에서는 에러를 던지거나, API 명세에 따라 다르게 처리할 수 있습니다.
+    // return Promise.reject(new Error(errorMessage));
+  }
+
+  // ★★★ 실제 API 경로로 변경해야 합니다. 예: '/auth/issue-token' 또는 '/users/token' 등 ★★★
+  const apiPath = '/auth/token';
+
+  return apiClient.post(
+    apiPath,
+    { provider_user_id: providerUserId }, // 요청 본문
+    {
       headers: {
-        // 기존 헤더에 추가되거나, Authorization 헤더가 있다면 이 값으로 덮어씁니다.
+        // 이 API가 게스트 토큰을 요구한다고 가정하고 헤더 설정
+        // 만약 게스트 토큰이 필요 없다면 이 headers 객체 전체를 제거하거나 수정해야 합니다.
         'Authorization': `Bearer ${guestToken}`
       }
-    });
+    }
+  );
 };
 
 /**
