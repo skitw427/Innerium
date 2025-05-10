@@ -17,7 +17,7 @@ const diagnosticRoutes = require('./routes/diagnostics');
 app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
 app.use('/gardens', gardenRoutes);
-app.use('/dailyRecords', dailyRecordRoutes);
+app.use('/daily-records', dailyRecordRoutes);
 app.use('/diagnostics', diagnosticRoutes);
 
 // 기본 라우트 (테스트용)

@@ -11,7 +11,7 @@ const getRecordDate = () => {
 };
 
 /**
- * @route   POST /dailyRecords
+ * @route   POST /daily-records
  * @desc    간단 분석 결과 (대화 내용 없이 감정 정보만) 저장
  * @access  Private
  */
@@ -161,7 +161,7 @@ router.post('/', authMiddleware, async (req, res, next) => {
 
   } catch (error) {
     if (transaction) await transaction.rollback(); // 오류 발생 시 롤백
-    console.error('POST /dailyRecords (simple) Error:', error);
+    console.error('POST /daily-records (simple) Error:', error);
     // SequelizeUniqueConstraintError 처리 (오늘 날짜로 이미 기록이 있는 경우)
     if (error.name === 'SequelizeUniqueConstraintError') {
         return res.status(400).json({ message: '오늘의 감정 기록은 이미 존재합니다. 하루에 한 번만 기록할 수 있습니다.' });
@@ -237,7 +237,7 @@ router.get('/monthly', authMiddleware, async (req, res, next) => {
 });
 
 /**
- * @route   GET /dailyRecords?date=YYYY-MM-DD
+ * @route   GET /daily-records?date=YYYY-MM-DD
  * @desc    특정 날짜 감정 진단 기록/결과 조회
  * @access  Private
  */
@@ -304,7 +304,7 @@ router.get('/', authMiddleware, async (req, res, next) => {
     res.status(200).json(responseData);
 
   } catch (error) {
-    console.error('GET /dailyRecords?date=YYYY-MM-DD Error:', error);
+    console.error('GET /daily-records?date=YYYY-MM-DD Error:', error);
     next(error);
   }
 });
