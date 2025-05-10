@@ -8,14 +8,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // 라우터 연결
-// const authRoutes = require('./routes/auth');
+const authRoutes = require('./routes/auth');
 // const userRoutes = require('./routes/users');
 // const gardenRoutes = require('./routes/gardens');
 // const dailyRecordRoutes = require('./routes/dailyRecords');
 // const diagnosticRoutes = require('./routes/diagnostics');
 // const recordRoutes = require('./routes/records');
 
-// app.use('/auth', authRoutes);
+app.use('/auth', authRoutes);
 // app.use('/users', userRoutes);
 // app.use('/gardens', gardenRoutes);
 // app.use('/dailyRecords', dailyRecordRoutes);
@@ -41,6 +41,16 @@ app.get('/test-db', async (req, res) => {
     console.error('DB 테스트 오류:', error);
     res.status(500).send('DB 연결 실패');
   }
+});
+
+// 중앙 에러 처리 미들웨
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(err.status || 500).json({
+    message: err.message || '서버 내부 오류가 발생했습니다.',
+    // 개발 환경에서는 에러 스택 포함 가능
+    ...(process.env.NODE_ENV === 'development' && { error: err.stack }),
+  });
 });
 
 // 서버 시작
