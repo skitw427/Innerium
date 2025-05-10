@@ -11,16 +11,14 @@ app.use(express.urlencoded({ extended: true }));
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const gardenRoutes = require('./routes/gardens');
-// const dailyRecordRoutes = require('./routes/dailyRecords');
+const dailyRecordRoutes = require('./routes/dailyRecords');
 const diagnosticRoutes = require('./routes/diagnostics');
-// const recordRoutes = require('./routes/records');
 
 app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
 app.use('/gardens', gardenRoutes);
-// app.use('/dailyRecords', dailyRecordRoutes);
+app.use('/dailyRecords', dailyRecordRoutes);
 app.use('/diagnostics', diagnosticRoutes);
-// app.use('/records', recordRoutes);
 
 // 기본 라우트 (테스트용)
 app.get('/', (req, res) => {
