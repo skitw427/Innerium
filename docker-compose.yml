@@ -1,0 +1,53 @@
+services:
+  app:
+    build:
+      context: ./backend  # Dockerfile의 위치를 ./backend로 지정
+      dockerfile: Dockerfile # ./backend/Dockerfile을 사용
+    container_name: innerium-backend-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3000}:${APP_PORT:-3000}"
+    volumes:
+      - ./backend:/usr/src/app # 호스트의 ./backend 디렉토리를 컨테이너의 /usr/src/app으로 마운트
+      - /usr/src/app/node_modules
+    environment:
+      NODE_ENV: development
+      DB_HOST: db
+      DB_USER: ${POSTGRES_USER} # /project-root/.env 의 POSTGRES_USER
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_DATABASE: ${POSTGRES_DB}
+      DB_PORT: 5432
+      PORT: ${APP_PORT:-3000}
+      JWT_SECRET: "${JWT_SECRET}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY}"
+    depends_on:
+      - db # db 서비스가 먼저 시작되도록 함
+    networks:
+      - app-network
+    # 마이그레이션 및 앱 실행 (이전 답변 참고하여 wait-for-it.sh 등 적용 가능)
+    command: sh -c "npm run migrate && npm start" # 또는 "npm run dev" 등 개발용 스크립트
+  db:
+    image: postgres:14-alpine # PostgreSQL 14 버전, alpine으로 가볍게
+    container_name: innerium-postgres-db
+    restart: unless-stopped
+    environment:
+      # PostgreSQL 컨테이너 초기화 시 사용될 환경 변수 (.env 파일에서 값을 가져옴)
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # 호스트의 POSTGRES_HOST_PORT를 컨테이너의 5432 포트로 매핑
+      # .env 파일의 POSTGRES_HOST_PORT 값을 사용 (기본값: "54321:5432")
+      - "${POSTGRES_HOST_PORT:-54321}:5432"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge # 기본 브릿지 드라이버 사용
+
+volumes:
+  postgres_data: # 명명된 볼륨 정의
