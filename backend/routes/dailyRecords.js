@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../models'); // Sequelize 모델
-const { authMiddleware } = require('../middlewares/authMiddleware'); // 인증 미들웨어 (경로 확인)
+const authMiddleware = require('../middlewares/authMiddleware'); // 인증 미들웨어 (경로 확인)
 const { Op } = require('sequelize'); // 필요시 사용
 
 // Helper function to get current date in YYYY-MM-DD format

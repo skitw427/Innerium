@@ -1,10 +1,9 @@
-// routes/diagnostics.js
 const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require('@google/generative-ai');
-const { authMiddleware } = require('../middlewares/authMiddleware'); // 인증 미들웨어 (경로 확인)
-// const db = require('../models'); // 필요하다면 DB 모델 사용 (예: 대화 내용 저장)
+const authMiddleware = require('../middlewares/authMiddleware'); // 인증 미들웨어 (경로 확인)
+const db = require('../models'); // 필요하다면 DB 모델 사용 (예: 대화 내용 저장)
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 if (!GEMINI_API_KEY) {
@@ -319,3 +318,5 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000); // 5분마다 체크
+
+module.exports = router;

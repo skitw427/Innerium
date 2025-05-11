@@ -10,8 +10,6 @@ COPY package*.json ./
 
 # 4. 의존성 설치
 RUN npm install
-# 만약 yarn을 사용한다면:
-# RUN yarn install
 
 # 5. 애플리케이션 소스 코드 전체 복사
 COPY . .
