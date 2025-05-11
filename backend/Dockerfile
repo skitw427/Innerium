@@ -18,5 +18,4 @@ COPY . .
 EXPOSE 3000
 
 # 7. 애플리케이션 실행 명령어
-CMD [ "npm", "start" ] # package.json의 "scripts": { "start": "node server.js" } 와 같이 정의된 경우
-# 또는 직접 실행: CMD [ "node", "server.js" ]
+CMD [ "npm", "start" ]
