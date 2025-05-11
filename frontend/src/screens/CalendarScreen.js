@@ -1,5 +1,5 @@
 // src/screens/CalendarScreen.js
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
   StyleSheet,
@@ -17,7 +17,7 @@ import { Calendar, LocaleConfig } from 'react-native-calendars';
 import NavigationBar from '../components/NavigationBar';
 import useScreenTransition from '../hooks/useScreenTransition';
 
-// --- 한글 언어 설정 (동일) ---
+// --- 한글 언어 설정 ---
 LocaleConfig.locales['ko'] = {
     monthNames: ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'],
     monthNamesShort: ['1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.', '10.', '11.', '12.'],
@@ -27,8 +27,8 @@ LocaleConfig.locales['ko'] = {
 };
 LocaleConfig.defaultLocale = 'ko';
 
-// --- 상수 정의 (동일) ---
-const ESTIMATED_NAV_BAR_HEIGHT = 110;
+// --- 상수 정의 ---
+const ESTIMATED_NAV_BAR_HEIGHT = 110; // 실제 NavigationBar 높이에 따라 조절
 const TOP_PADDING = 60;
 const MARGIN_RATIO_5_WEEKS = 0.11;
 const MARGIN_RATIO_6_WEEKS = 0.08;
@@ -37,7 +37,7 @@ const MAX_MARGIN = 250;
 const DAY_CELL_BASE_HEIGHT = 32;
 const DAY_TEXT_FONT_SIZE = 16;
 
-// --- Helper Function: 주 계산 (동일) ---
+// --- Helper Function: 주 계산 ---
 const getWeeksInMonthDisplay = (year, month, firstDayOfWeek = 0) => {
     const firstOfMonth = new Date(year, month - 1, 1);
     const lastOfMonth = new Date(year, month, 0);
@@ -48,14 +48,24 @@ const getWeeksInMonthDisplay = (year, month, firstDayOfWeek = 0) => {
     return weeks;
 };
 
-// --- 사용자 정의 Day 컴포넌트 (동일) ---
+// --- Helper Function: 날짜 셀 하단 패딩 계산 ---
+const calculateDayPadding = (year, month, currentCalendarHeight) => {
+    if (currentCalendarHeight <= 0) return MIN_MARGIN;
+    const numberOfWeeks = getWeeksInMonthDisplay(year, month);
+    const paddingRatio = numberOfWeeks === 6 ? MARGIN_RATIO_6_WEEKS : MARGIN_RATIO_5_WEEKS;
+    const calculatedPadding = currentCalendarHeight * paddingRatio;
+    return Math.max(MIN_MARGIN, Math.min(calculatedPadding, MAX_MARGIN));
+};
+
+// --- 사용자 정의 Day 컴포넌트 ---
 const CustomDayComponent = React.memo(({ date, state, marking, onPress, onLongPress, dayPaddingBottom }) => {
     const isToday = state === 'today';
     const isDisabled = state === 'disabled';
     const isSelected = state === 'selected';
-    const totalCellHeight = DAY_CELL_BASE_HEIGHT + dayPaddingBottom;
+    const validPadding = typeof dayPaddingBottom === 'number' && !isNaN(dayPaddingBottom) ? dayPaddingBottom : MIN_MARGIN;
+    const totalCellHeight = DAY_CELL_BASE_HEIGHT + validPadding;
     const textStyle = [ styles.dayText, isToday && styles.todayText, isSelected && styles.selectedText, isDisabled && styles.disabledText, ];
-    const wrapperStyle = [ styles.dayWrapper, { height: totalCellHeight, paddingBottom: dayPaddingBottom, }, isSelected && styles.selectedWrapper(totalCellHeight), ];
+    const wrapperStyle = [ styles.dayWrapper, { height: totalCellHeight, paddingBottom: validPadding, }, isSelected && styles.selectedWrapper(totalCellHeight), ];
     const dotStyle = [ styles.dot, { bottom: DAY_CELL_BASE_HEIGHT * 0.15 }, marking?.dotColor ? { backgroundColor: marking.dotColor } : {} ];
 
     return (
@@ -66,14 +76,13 @@ const CustomDayComponent = React.memo(({ date, state, marking, onPress, onLongPr
     );
 });
 
-// --- Android LayoutAnimation 활성화 (동일) ---
+// --- Android LayoutAnimation 활성화 ---
 if (Platform.OS === 'android') {
     if (UIManager.setLayoutAnimationEnabledExperimental) {
         UIManager.setLayoutAnimationEnabledExperimental(true);
     }
 }
 
-// --- CalendarScreen 컴포넌트 ---
 const CalendarScreen = ({ navigation }) => {
   const screenTransition = useScreenTransition() || {};
   const isTransitioning = screenTransition.isTransitioning === true;
@@ -81,96 +90,98 @@ const CalendarScreen = ({ navigation }) => {
 
   const { width, height: windowHeight } = useWindowDimensions();
 
-  // unmountOnBlur:true에 의해 화면이 재마운트될 때 이 초기값이 적용됩니다.
-  const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
-  // console.log('CalendarScreen: currentCalendarDate state initialized or updated to:', currentCalendarDate.toISOString());
+  const [targetMonthString, setTargetMonthString] = useState(new Date().toISOString().split('T')[0]);
+  const initialDateForPadding = new Date(targetMonthString);
+  const [yearForPadding, setYearForPadding] = useState(initialDateForPadding.getFullYear());
+  const [monthForPadding, setMonthForPadding] = useState(initialDateForPadding.getMonth() + 1);
 
   useEffect(() => {
-    console.log(`CalendarScreen MOUNTED. Initial currentCalendarDate: ${currentCalendarDate.toISOString().split('T')[0]}`);
-    return () => {
-      console.log('CalendarScreen UNMOUNTED');
-    };
+    // console.log(`CalendarScreen MOUNTED. Initial targetMonthString: ${targetMonthString}`);
+    // return () => { console.log('CalendarScreen UNMOUNTED'); };
   }, []);
 
-  const availableHeight = windowHeight - TOP_PADDING - ESTIMATED_NAV_BAR_HEIGHT;
-  const calendarHeight = Math.max(availableHeight - 20, 250);
-  const yearForDisplay = currentCalendarDate.getFullYear();
-  const monthForDisplay = currentCalendarDate.getMonth() + 1;
-  const numberOfWeeks = getWeeksInMonthDisplay(yearForDisplay, monthForDisplay);
-  const paddingRatio = numberOfWeeks === 6 ? MARGIN_RATIO_6_WEEKS : MARGIN_RATIO_5_WEEKS;
-  let calculatedPadding = calendarHeight * paddingRatio;
-  const dynamicDayPaddingBottom = Math.max(MIN_MARGIN, Math.min(calculatedPadding, MAX_MARGIN));
+  const calendarHeight = useMemo(() => {
+    const calculatedHeight = windowHeight - TOP_PADDING - ESTIMATED_NAV_BAR_HEIGHT;
+    return Math.max(calculatedHeight, 250);
+  }, [windowHeight]);
 
-  const handleDayPress = (day) => {
-    console.log('선택된 날짜:', day);
-  };
+  const dynamicDayPaddingBottom = useMemo(() => {
+    return calculateDayPadding(yearForPadding, monthForPadding, calendarHeight);
+  }, [yearForPadding, monthForPadding, calendarHeight]);
 
-  const handleDayLongPress = (day) => {
-    console.log('길게 선택된 날짜:', day);
-  };
+  const handleDayPress = (day) => { /* console.log('선택된 날짜:', day); */ };
+  const handleDayLongPress = (day) => { /* console.log('길게 선택된 날짜:', day); */ };
 
   const handleMonthChange = useCallback((monthData) => {
-    console.log('Calendar: onMonthChange triggered. New month data:', monthData);
+    const { year, month, dateString } = monthData;
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    const newDate = new Date(monthData.year, monthData.month - 1, 1);
-    setCurrentCalendarDate(newDate); // 이 상태 업데이트는 달력 내부의 월 이동을 반영합니다.
-    console.log('CalendarScreen: currentCalendarDate state updated by onMonthChange to:', newDate.toISOString());
+    setYearForPadding(year);
+    setMonthForPadding(month);
+    setTargetMonthString(dateString);
   }, []);
-
-  // current prop에 전달할 날짜 문자열 (YYYY-MM-DD 형식)
-  // 이 값은 currentCalendarDate 상태에 따라 변경됩니다.
-  const currentDateString = currentCalendarDate.toISOString().split('T')[0];
-  // console.log(`CalendarScreen rendering. current prop for Calendar: ${currentDateString}`);
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={[styles.container, { paddingHorizontal: width * 0.05 }]}>
-        <View style={styles.calendarWrapper}>
-          <Calendar
-            style={{
-               height: calendarHeight,
-               backgroundColor: '#eef7ff',
+      <View style={styles.outerContainer}>
+        <View style={[styles.mainContentContainer, { paddingHorizontal: width * 0.05 }]}>
+          <View style={styles.calendarPositioningContainer}>
+            <View style={{ height: calendarHeight, overflow: 'hidden' }}>
+              <Calendar
+                style={{
+                   height: calendarHeight,
+                   backgroundColor: '#eef7ff',
+                }}
+                current={targetMonthString}
+                dayComponent={(dayProps) => (
+                  <CustomDayComponent {...dayProps} dayPaddingBottom={dynamicDayPaddingBottom} />
+                )}
+                onDayPress={handleDayPress}
+                onDayLongPress={handleDayLongPress}
+                onMonthChange={handleMonthChange}
+                theme={{
+                  arrowColor: 'orange',
+                  calendarBackground: 'transparent',
+                }}
+              />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.navigationBarPlacement}>
+          <NavigationBar
+            onNavigate={(screen) => {
+              if (typeof handleNavigate === 'function') {
+                handleNavigate(navigation, screen);
+              } else {
+                console.error("handleNavigate is not a function in CalendarScreen");
+              }
             }}
-            // ★★★ key prop 제거 ★★★
-            // current prop만 사용하여 달력에 현재 표시할 날짜를 명시적으로 전달합니다.
-            // unmountOnBlur:true로 화면이 재마운트되면, currentCalendarDate가 오늘 날짜로 초기화되고,
-            // 이 current prop도 그에 맞게 설정되어 달력이 오늘 달을 보여줍니다.
-            // 사용자가 달력 내에서 월을 변경하면 onMonthChange가 currentCalendarDate를 업데이트하고,
-            // 이 변경된 currentCalendarDate가 current prop을 통해 달력에 반영됩니다.
-            current={currentDateString}
-            dayComponent={(dayProps) => (
-              <CustomDayComponent {...dayProps} dayPaddingBottom={dynamicDayPaddingBottom} />
-            )}
-            onDayPress={handleDayPress}
-            onDayLongPress={handleDayLongPress}
-            onMonthChange={handleMonthChange}
-            theme={{
-              arrowColor: 'orange',
-              calendarBackground: 'transparent',
-            }}
+            isTransitioning={isTransitioning}
           />
         </View>
-        <NavigationBar
-          onNavigate={(screen) => {
-            if (typeof handleNavigate === 'function') {
-              handleNavigate(navigation, screen);
-            } else {
-              console.error("handleNavigate is not a function in CalendarScreen");
-            }
-          }}
-          isTransitioning={isTransitioning}
-        />
       </View>
       <StatusBar style="auto" />
     </SafeAreaView>
   );
 };
 
-// --- 스타일 정의 (동일) ---
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#eef7ff' },
-  container: { flex: 1, justifyContent: 'space-between', alignItems: 'center' },
-  calendarWrapper: { width: '100%', paddingTop: TOP_PADDING },
+  outerContainer: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  mainContentContainer: {
+    flex: 1,
+    width: '100%',
+  },
+  calendarPositioningContainer: {
+    width: '100%',
+    paddingTop: TOP_PADDING,
+  },
+  navigationBarPlacement: {
+    width: '100%',
+  },
   dayWrapper: {
     width: 32,
     alignItems: 'center',

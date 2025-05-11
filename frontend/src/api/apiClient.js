@@ -226,8 +226,8 @@ export const issueUserToken = (providerUserId, guestToken) => {
  * [GET] /users/me
  * 요청 헤더: Authorization: Bearer <user_token> (요청 인터셉터에서 자동 추가되어야 함)
  * 요청 본문: 없음
- * 성공 응답 본문(UserInfoResDTO): { userId: string, auth_provider: string, email: string, notification_enabled: boolean, role: string }
- * @returns {Promise<import("axios").AxiosResponse<{userId: string, auth_provider: string, email: string, notification_enabled: boolean, role: string}>>} UserInfoResDTO 포함 응답
+ * 성공 응답 본문(UserInfoResDTO): { user_Id: string, auth_provider: string, email: string, notification_enabled: boolean, role: string }
+ * @returns {Promise<import("axios").AxiosResponse<{user_id: string, auth_provider: string, email: string, notification_enabled: boolean, role: string}>>} UserInfoResDTO 포함 응답
  */
 export const getMyInfo = () => {
     // Authorization 헤더는 요청 인터셉터가 SecureStore에서 토큰을 읽어 자동으로 추가해 줄 것입니다.
@@ -475,7 +475,7 @@ export const saveDailyRecord = (recordData) => {
 
 /**
  * 월별 캘린더 기록 조회
- * [GET] /records/monthly
+ * [GET] /daily-records/monthly
  * 요청 헤더: Authorization: Bearer <user_token> (요청 인터셉터에서 자동 추가되어야 함)
  * 요청 쿼리 파라미터: year (number), month (number)
  * 요청 본문: 없음
@@ -509,7 +509,7 @@ export const getMonthlyRecords = (year, month) => {
  // API가 월(month)을 두 자리 문자열(예: '05')로 요구할 수 있으므로 변환합니다.
  const formattedMonth = String(month).padStart(2, '0');
  // GET 요청의 config 객체에 params로 쿼리 파라미터를 전달합니다.
- return apiClient.get('/records/monthly', { params: { year, month: formattedMonth } });
+ return apiClient.get('/daily-records/monthly', { params: { year, month: formattedMonth } });
 };
 
 /**
