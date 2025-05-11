@@ -28,8 +28,8 @@ const TREE_IMAGE_SCALE_6 = 0.75;
 const TREE_IMAGE_SCALE_8 = 0.85;
 const TREE_IMAGE_SCALE_10 = 1;
 
-// ★★★ 새로운 꽃 크기 스케일 팩터 (사용 가능한 화면 높이 기준) ★★★
-const FLOWER_DIMENSION_SCALE_FACTOR_HEIGHT = 0.1; // 예: 꽃의 한 변이 사용 가능한 화면 높이의 10%
+// 꽃 크기 스케일 팩터 (사용 가능한 화면 높이 기준)
+const FLOWER_DIMENSION_SCALE_FACTOR_HEIGHT = 0.1;
 
 // 화면 레이아웃 비율 상수
 const TOP_SPACER_RATIO = 0.1;
@@ -52,6 +52,7 @@ const HomeScreen = ({ navigation, route }) => {
   const [isResultModalVisible, setIsResultModalVisible] = useState(false);
   const [resultModalMessage, setResultModalMessage] = useState('');
   const [resultModalImage, setResultModalImage] = useState(null);
+  const [resultModalEmotionIcon, setResultModalEmotionIcon] = useState(null);
   const [placedFlowers, setPlacedFlowers] = useState([]);
   const [currentTreeImageSource, setCurrentTreeImageSource] = useState(IMAGES.treeImage);
   const [currentTreeImageScalingFactor, setCurrentTreeImageScalingFactor] = useState(TREE_IMAGE_SCALE_BASE);
@@ -59,11 +60,9 @@ const HomeScreen = ({ navigation, route }) => {
   const availableContentHeight = windowHeight - ESTIMATED_NAV_BAR_HEIGHT;
   const topSpacerHeight = availableContentHeight * TOP_SPACER_RATIO;
   const treeContainerHeight = availableContentHeight * TREE_CONTAINER_AREA_RATIO;
-  const treeContainerWidth = treeContainerHeight; // 나무 컨테이너는 정사각형으로 가정
+  const treeContainerWidth = treeContainerHeight;
   const flowerCanvasHeight = availableContentHeight - topSpacerHeight - treeContainerHeight - BUTTON_BOTTOM_FIXED_MARGIN;
-  const flowerCanvasWidth = windowWidth * (1 - (0.05 * 2)); // 좌우 여백 고려
-
-  // ★★★ 현재 꽃의 동적 픽셀 크기 (사용 가능한 화면 높이 기준) ★★★
+  const flowerCanvasWidth = windowWidth * (1 - (0.05 * 2));
   const currentFlowerPixelSize = availableContentHeight * FLOWER_DIMENSION_SCALE_FACTOR_HEIGHT;
 
   useFocusEffect(
@@ -78,6 +77,13 @@ const HomeScreen = ({ navigation, route }) => {
     if (route && route.params && route.params.diagnosisResult && route.params.emotionKey) {
       const { diagnosisResult, emotionKey } = route.params;
       let newlySelectedImageSource = null;
+      let selectedEmotionIconSource = null;
+
+      if (emotionKey && IMAGES.emotionIcon && IMAGES.emotionIcon[emotionKey]) {
+        selectedEmotionIconSource = IMAGES.emotionIcon[emotionKey];
+      } else {
+        console.warn(`[HomeScreen] Emotion icon not found for key: ${emotionKey}`);
+      }
 
       if (emotionKey && IMAGES.flowers && IMAGES.flowers[emotionKey]) {
         const allImagesForEmotion = IMAGES.flowers[emotionKey];
@@ -101,10 +107,10 @@ const HomeScreen = ({ navigation, route }) => {
             if (placedImageKeysForEmotion.length > 0) {
                 newlySelectedImageSource = allImagesForEmotion[placedImageKeysForEmotion[Math.floor(Math.random() * placedImageKeysForEmotion.length)]];
             } else {
-                newlySelectedImageSource = allImagesForEmotion[allImageKeysForEmotion[0]]; // Fallback
+                newlySelectedImageSource = allImagesForEmotion[allImageKeysForEmotion[0]];
             }
             Alert.alert("알림", `이미 '${emotionKey}' 감정의 모든 종류의 꽃이 정원에 있어요!`);
-            randomImageKeyToPlace = null; // 중복 종류는 심지 않음 (결과 모달에는 표시)
+            randomImageKeyToPlace = null;
           }
 
           if (randomImageKeyToPlace && newlySelectedImageSource) {
@@ -130,14 +136,17 @@ const HomeScreen = ({ navigation, route }) => {
             });
           }
         } else {
-          newlySelectedImageSource = null; // 해당 감정에 꽃 이미지가 없음
+          console.warn(`[HomeScreen] No flower images found for emotionKey: ${emotionKey}`);
+          newlySelectedImageSource = null;
         }
       } else {
-        newlySelectedImageSource = null; // 감정키가 없거나 경로 문제
+        console.warn(`[HomeScreen] emotionKey is missing or IMAGES.flowers structure is problematic for emotionKey: ${emotionKey}`);
+        newlySelectedImageSource = null;
       }
 
       setResultModalMessage(diagnosisResult);
       setResultModalImage(newlySelectedImageSource);
+      setResultModalEmotionIcon(selectedEmotionIconSource);
       setIsResultModalVisible(true);
 
       if (navigation && typeof navigation.setParams === 'function') {
@@ -147,7 +156,7 @@ const HomeScreen = ({ navigation, route }) => {
         });
       }
     }
-  }, [route, navigation]); // placedFlowers 함수형 업데이트로 의존성 제거
+  }, [route, navigation]);
 
 
   useEffect(() => {
@@ -172,6 +181,7 @@ const HomeScreen = ({ navigation, route }) => {
   const handleModalClose = () => setIsModalVisible(false);
   const handleResultModalClose = () => {
     setIsResultModalVisible(false);
+    setResultModalEmotionIcon(null);
     if (navigation && typeof navigation.setParams === 'function') {
       if (route && route.params && (route.params.diagnosisResult || route.params.emotionKey)) {
         navigation.setParams({ diagnosisResult: undefined, emotionKey: undefined });
@@ -189,8 +199,8 @@ const HomeScreen = ({ navigation, route }) => {
               <Image
                 source={currentTreeImageSource}
                 style={{
-                  width: `${currentTreeImageScalingFactor * 100}%`, // treeContainer의 %
-                  height: `${currentTreeImageScalingFactor * 100}%`,// treeContainer의 %
+                  width: `${currentTreeImageScalingFactor * 100}%`,
+                  height: `${currentTreeImageScalingFactor * 100}%`,
                 }}
                 resizeMode="contain"
               />
@@ -213,7 +223,6 @@ const HomeScreen = ({ navigation, route }) => {
 
         {placedFlowers.map(flower => {
           const actualFlowerCanvasStartY = topSpacerHeight + treeContainerHeight;
-          // ★★★ 꽃 위치 계산 시 currentFlowerPixelSize 사용 ★★★
           const flowerTop = actualFlowerCanvasStartY + (flower.relativePos.topRatio * flowerCanvasHeight) - (currentFlowerPixelSize / 2);
           const flowerLeft = (windowWidth * 0.05) + (flower.relativePos.leftRatio * flowerCanvasWidth) - (currentFlowerPixelSize / 2);
 
@@ -224,9 +233,8 @@ const HomeScreen = ({ navigation, route }) => {
               style={[
                 styles.placedFlowerImage,
                 {
-                  // ★★★ 꽃 크기를 계산된 픽셀 값으로 설정 ★★★
                   width: currentFlowerPixelSize,
-                  height: currentFlowerPixelSize, // 정사각형 꽃으로 가정
+                  height: currentFlowerPixelSize,
                   top: flowerTop,
                   left: flowerLeft,
                 }
@@ -262,10 +270,16 @@ const HomeScreen = ({ navigation, route }) => {
           <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={handleResultModalClose}>
             <TouchableOpacity activeOpacity={1} style={styles.resultModalContentContainer}>
               <View style={styles.resultModalContent}>
+                {resultModalEmotionIcon && (
+                  <Image source={resultModalEmotionIcon} style={styles.resultEmotionIcon} resizeMode="contain" />
+                )}
                 {resultModalImage ? (
                   <Image source={resultModalImage} style={styles.resultFlowerImage} resizeMode="contain" />
                 ) : (
-                  <View style={styles.resultImagePlaceholder}><Text>이미지 없음</Text></View>
+                  // 꽃 이미지가 없을 경우 (예: 해당 감정에 꽃이 없거나, 중복으로 심지 않기로 한 경우)
+                  // 여기에 플레이스홀더를 두거나, 아예 아무것도 표시하지 않을 수 있습니다.
+                  // 또는, "오늘은 이 감정에 해당하는 새로운 꽃이 없어요." 같은 메시지 표시 가능
+                  <View style={styles.resultImagePlaceholder}><Text>꽃 없음</Text></View>
                 )}
                 <Text style={styles.resultModalText}>{resultModalMessage}</Text>
                 <TouchableOpacity onPress={handleResultModalClose} style={styles.resultCloseButton} activeOpacity={0.7}>
@@ -297,9 +311,8 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   treeContainer: {
-    // ★★★ 나무를 컨테이너 하단에 정렬 ★★★
-    justifyContent: 'flex-end', // 자식 요소를 컨테이너의 끝(하단)으로 정렬
-    alignItems: 'center',    // 가로 중앙 정렬 유지
+    justifyContent: 'flex-end',
+    alignItems: 'center',
     zIndex: 1,
     overflow: 'hidden',
   },
@@ -338,7 +351,6 @@ const styles = StyleSheet.create({
   placedFlowerImage: {
     position: 'absolute',
     zIndex: 0,
-    // width, height, top, left는 인라인 스타일로 동적 설정
   },
   modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0, 0, 0, 0.6)' },
   modalContentContainer: {},
@@ -350,7 +362,12 @@ const styles = StyleSheet.create({
   modalButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   resultModalContentContainer: {},
   resultModalContent: { width: '80%', maxWidth: 300, padding: 20, backgroundColor: 'white', borderRadius: 15, alignItems: 'center', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 },
-  resultFlowerImage: { width: 100, height: 100, marginBottom: 15 }, // 결과 모달의 꽃 크기는 고정값 유지
+  resultEmotionIcon: {
+    width: 50,
+    height: 50,
+    marginBottom: 10,
+  },
+  resultFlowerImage: { width: 100, height: 100, marginBottom: 15 },
   resultImagePlaceholder: { width: 100, height: 100, backgroundColor: '#eee', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
   resultModalText: { fontSize: 17, color: '#333', textAlign: 'center', marginBottom: 25, lineHeight: 24 },
   resultCloseButton: { backgroundColor: '#007bff', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 30, marginTop: 10 },
