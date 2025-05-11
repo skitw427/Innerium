@@ -17,7 +17,7 @@ RUN npm install
 COPY . .
 
 # 6. 애플리케이션이 실행될 포트 명시 (Express 앱에서 listen하는 포트)
-EXPOSE 3000 # 예시: 앱이 3000번 포트를 사용한다면
+EXPOSE 3000
 
 # 7. 애플리케이션 실행 명령어
 CMD [ "npm", "start" ] # package.json의 "scripts": { "start": "node server.js" } 와 같이 정의된 경우
