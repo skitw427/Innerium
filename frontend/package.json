@@ -24,7 +24,8 @@
     "react-native-calendars": "^1.1312.0",
     "react-native-linear-gradient": "^2.8.3",
     "react-native-safe-area-context": "^5.4.0",
-    "react-native-screens": "^4.10.0"
+    "react-native-screens": "^4.10.0",
+    "react-native-view-shot": "^4.0.3"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
