@@ -46,6 +46,8 @@ const DAY_TEXT_FONT_SIZE = 16; // 날짜 텍스트 크기
 const TODAY_TEXT_COLOR = '#00adf5'; // '오늘' 날짜 텍스트 색상
 const EMOTION_LOG_PREFIX = '@emotionLog_'; // 감정 로그 AsyncStorage 키 접두사
 
+const CALENDAR_SCREEN_INITIAL_SYNC_DONE_KEY = '@CalendarScreen_InitialSyncDone_v1';
+
 // --- Helper Functions ---
 // 특정 년/월이 달력에서 몇 주를 차지하는지 계산
 const getWeeksInMonthDisplay = (year, month, firstDayOfWeek = 0) => {
@@ -161,8 +163,6 @@ const CalendarScreen = ({ navigation }) => {
   const handleNavigate = screenTransition.handleNavigate || (() => {});
   const { width, height: windowHeight } = useWindowDimensions(); // 화면 크기 정보
 
-  const isInitialCal = useRef(false);
-
   // 특정 월의 감정 마킹 정보 업데이트 함수
   const updateMarkingsForMonth = useCallback(async (year, month, appTodayDate) => {
     // 입력값 유효성 검사
@@ -177,13 +177,13 @@ const CalendarScreen = ({ navigation }) => {
     // getDaysInMonth 결과 유효성 검사
     if (!Array.isArray(daysInMonth)) {
       console.error('[CalendarScreen] getDaysInMonth did not return an array for', year, month);
-      setMarkedDates({ [appTodayDate]: { isToday: true } }); // 최소한 오늘 날짜 마킹
+      setMarkedDates(prev => ({ ...prev, [appTodayDate]: { ...(prev[appTodayDate] || {}), isToday: true } }));
       // setIsLoading(false);
       return;
     }
     if (daysInMonth.length === 0) { // 해당 월에 날짜가 없는 경우 (이론상 발생 어려움)
         console.warn("[CalendarScreen] No days found for month:", year, month);
-        setMarkedDates({ [appTodayDate]: { isToday: true } });
+        setMarkedDates(prev => ({ ...prev, [appTodayDate]: { ...(prev[appTodayDate] || {}), isToday: true } }));
         setIsLoading(false);
         return;
     }
@@ -212,24 +212,27 @@ const CalendarScreen = ({ navigation }) => {
           console.error('[CalendarScreen] AsyncStorage.multiGet did not return an array.');
       }
 
-      // '오늘' 날짜에 isToday 플래그 추가 (다른 마킹 정보 덮어쓰지 않도록 마지막에)
-      if (newMarkedDates[appTodayDate]) {
-          newMarkedDates[appTodayDate].isToday = true;
-      } else { // 오늘 날짜에 다른 마킹 정보가 없었으면 isToday만 설정
-          newMarkedDates[appTodayDate] = { isToday: true };
-      }
+      setMarkedDates(prevMarkedDates => {
+        const mergedMarkedDates = { ...prevMarkedDates, ...newMarkedDates };
 
-      // 최종 마킹 상태 업데이트
-      setMarkedDates(newMarkedDates);
+        if (appTodayDate) { // appTodayDate가 유효한 경우에만 처리
+            if (mergedMarkedDates[appTodayDate]) {
+                mergedMarkedDates[appTodayDate].isToday = true;
+            } else {
+                mergedMarkedDates[appTodayDate] = { isToday: true };
+            }
+        }
+        return mergedMarkedDates;
+      });
 
     } catch (error) {
       console.error("[CalendarScreen] Failed to update markings:", error);
       // 에러 발생 시 최소한 오늘 날짜는 표시
-      setMarkedDates({ [appTodayDate]: { isToday: true } });
-    } finally {
-       // setIsLoading(false); // 로딩 종료
+      if (appTodayDate) {
+        setMarkedDates(prev => ({ ...prev, [appTodayDate]: { ...(prev[appTodayDate] || {}), isToday: true } }));
+      }
     }
-  }, []); // 의존성 배열 비움 (함수 자체는 재생성되지 않음)
+  }, []); // 의존성 배열 비움
 
   // 화면 포커스 시 초기 데이터 로드
   useFocusEffect(
@@ -250,18 +253,20 @@ const CalendarScreen = ({ navigation }) => {
           setCurrentAppDateString(formattedAppDate); // '오늘' 날짜 설정
           setCalendarFocusDateString(formattedAppDate); // 달력 초기 포커스 설정
           setCurrentYearMonth({ year: initialYear, month: initialMonth }); // 현재 년/월 설정
+          
+          const initialSyncStatus = await AsyncStorage.getItem(CALENDAR_SCREEN_INITIAL_SYNC_DONE_KEY);
 
-          if (!isInitialCal.current) {
+          if (initialSyncStatus !== 'true') {
+            console.log(`[CalendarScreen] '${CALENDAR_SCREEN_INITIAL_SYNC_DONE_KEY}' 확인: 최초 동기화 필요.`);
             console.log("[CalendarScreen] 최초 동기화 시도:", initialYear, initialMonth);
             try {
               const response = await getMonthlyRecords(initialYear, initialMonth);
-              // CalenderResDTO 형식의 응답 데이터 (response.data)
               const serverRecords = response.data?.monthly_records;
 
               if (Array.isArray(serverRecords)) {
                 const recordsToStore = serverRecords.map(record => [
                   `${EMOTION_LOG_PREFIX}${record.record_date}`,
-                  record.emotion_type.name // 감정 이름을 emotionKey로 사용
+                  record.emotion_type.name
                 ]);
 
                 if (recordsToStore.length > 0) {
@@ -271,13 +276,17 @@ const CalendarScreen = ({ navigation }) => {
               } else {
                 console.warn("[CalendarScreen] API 응답에 monthly_records가 없거나 형식이 올바르지 않습니다.");
               }
-              // 성공적으로 동기화 완료 시 플래그 설정
-              isInitialCal.current = true;
-
+              // 성공적으로 동기화 완료 시 AsyncStorage에 플래그 저장
+              if (isActive) {
+                await AsyncStorage.setItem(CALENDAR_SCREEN_INITIAL_SYNC_DONE_KEY, 'true');
+                console.log(`[CalendarScreen] '${CALENDAR_SCREEN_INITIAL_SYNC_DONE_KEY}'에 'true' 저장 완료.`);
+              }
             } catch (apiError) {
               console.error("[CalendarScreen] API 호출 또는 데이터 저장 실패:", apiError);
-              // API 실패 시에도 다음 단계 (로컬 데이터 로드)는 진행
+              // API 실패 시에는 동기화 완료 플래그를 저장하지 않음 (다음 포커스 시 재시도 가능)
             }
+          } else {
+            console.log(`[CalendarScreen] '${CALENDAR_SCREEN_INITIAL_SYNC_DONE_KEY}' 확인: 이미 최초 동기화 완료됨, API 호출 건너뜀.`);
           }
 
           // 초기 월 마킹 정보 로드
@@ -290,20 +299,20 @@ const CalendarScreen = ({ navigation }) => {
             const today = new Date();
             const formattedToday = formatDateToYYYYMMDD(today);
             setCurrentAppDateString(formattedToday);
-            setCalendarFocusDateString(formattedToday);
+            setCalendarFocusDateString(formattedToday); // 에러 시에도 설정
             setCurrentYearMonth({ year: today.getFullYear(), month: today.getMonth() + 1 });
-            setMarkedDates({ [formattedToday]: { isToday: true } }); // 최소 마킹
-            setIsLoading(false); // 로딩 종료
-          } //finally {
-            //if(isActive) setIsLoading(false); // 모든 작업 완료 후 로딩 종료
-        //}
+            setMarkedDates({ [formattedToday]: { isToday: true } });
+          }
+        } finally {
+          if (isActive) {
+            setIsLoading(false);
+          }
         }
-        // updateMarkingsForMonth 내부에서 로딩 종료
       };
       loadInitialData();
       // 클린업 함수: 컴포넌트 언마운트 시 플래그 변경
       return () => { isActive = false; };
-    }, [updateMarkingsForMonth]) // updateMarkingsForMonth가 변경되면 effect 재실행 (하지만 useCallback으로 감싸여 거의 변경되지 않음)
+    }, [updateMarkingsForMonth])
   );
 
   // 달력 월 변경 시 핸들러
