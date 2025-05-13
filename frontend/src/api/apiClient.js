@@ -226,33 +226,35 @@ export const updateUserSettings = (settingsData) => {
     return apiClient.patch('/users/settings', settingsData);
 };
 
-// --- 정원 관련 API 함수 (추가/수정된 부분) ---
+// --- 정원 관련 API 함수 ---
 
 /**
  * 현재 진행 중인 정원 정보 불러오기
  * [GET] /gardens/current
  * 요청 헤더: Authorization: Bearer <user_token> (요청 인터셉터에서 자동 추가)
  * 요청 본문: 없음
- * 성공 응답 본문(CurrentGardenResDTO - 가정된 확장 형식): {
- *   garden_id: string | null, // 서버에서 관리하는 현재 정원의 ID (없을 수 있음)
- *   tree_level: number, // 현재 나무 레벨 (또는 꽃 개수로 서버에서 계산 가능)
- *   snapshot_taken: boolean, // 현재 정원 스냅샷 촬영 여부
+ * 성공 응답 본문(CurrentGardenResDTO): {
+ *   garden_id: string, // 서버에서 관리하는 현재 정원의 ID
+ *   tree_level: number, // 현재 나무 레벨 (int)
+ *   sky_color: string, // 현재 하늘 색상
+ *   is_complete: boolean, // 정원 완성 여부
  *   flowers: Array<{
- *     id: string, // 클라이언트/서버 간 동기화되는 꽃의 고유 ID
- *     emotion_key: string, // 예: "H", "Ax" (클라이언트 IMAGES 상수와 매핑 위함)
- *     image_key: string, // 예: "flower1", "flower2" (클라이언트 IMAGES 상수와 매핑 위함)
- *     emotion_name: string,
- *     messages: Array<{ sender: 'user' | 'bot', text: string, id?: string }>, // 대화 기록
- *     creation_date: string, // "YYYY-MM-DD"
- *     relative_pos: { topRatio: number, leftRatio: number } | null // 상대적 위치
+ *     flower_instance_id: string, // 클라이언트/서버 간 동기화되는 꽃의 고유 ID
+ *     flower_type: {
+ *       id: number, // 꽃 종류의 고유 ID (int)
+ *       image_url: string // 꽃 이미지의 URL
+ *     },
+ *     position: {
+ *       x: number, // x 좌표 (float)
+ *       y: number  // y 좌표 (float)
+ *     },
+ *     emotion_type_id: number // 감정 종류의 ID (int)
  *   }>
  * }
  * @returns {Promise<import("axios").AxiosResponse<CurrentGardenResDTO>>} CurrentGardenResDTO 포함 응답
  */
 export const getCurrentGarden = () => {
- // Authorization 헤더는 인터셉터가 자동으로 추가합니다.
- // GET 요청이므로 요청 본문(두 번째 인자)은 필요 없습니다.
- return apiClient.get('/gardens/current');
+  return apiClient.get('/gardens/current');
 };
 
 /**
@@ -413,7 +415,7 @@ export const converseWithAI = (messageData) => {
  *   second_emotion_id: number, // 두 번째 감정 ID (int -> number)
  *   second_emotion_amount: number // 두 번째 감정 정도 (int -> number)
  * }
- * 성공 응답 본문: 내용 불명확 (없거나, 성공 메시지, 또는 저장된 ID 등)
+ * 성공 응답 본문: 없음음
  * @param {object} recordData - 저장할 간단 진단 결과 데이터.
  *   예: { first_emotion_id: 1, first_emotion_amount: 3, second_emotion_id: 5, second_emotion_amount: 2 }
  * @returns {Promise<import("axios").AxiosResponse<any>>} 성공 여부 또는 저장된 ID 등 포함 가능

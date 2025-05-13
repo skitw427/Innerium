@@ -1,20 +1,17 @@
-// frontend/App.js (이전 제공 코드 재확인)
-
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, ActivityIndicator, Text, StyleSheet, Button } from 'react-native'; // 로딩 및 에러 표시용
+import { View, ActivityIndicator, Text, StyleSheet, Button } from 'react-native';
 
-import AppNavigator from './src/navigation/AppNavigator'; // 경로 확인!
-import { GardenProvider } from './src/context/GardenContext';
-import { AuthProvider, useAuth } from './src/context/AuthContext'; // AuthContext import
+import AppNavigator from './src/navigation/AppNavigator';
+import { GardenProvider, useGarden } from './src/context/GardenContext';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
 
 const AppContent = () => {
-  const { isLoading, isLoggedIn, refreshAuth } = useAuth();
+  const { isLoading: isAuthLoading, isLoggedIn, refreshAuth } = useAuth();
 
-  if (isLoading) {
+  if (isAuthLoading) {
     return (
-      // View 안에 Text 컴포넌트 외 다른 텍스트 없음 확인
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#007AFF" />
         <Text style={styles.statusText}>앱을 준비 중입니다...</Text>
@@ -24,7 +21,6 @@ const AppContent = () => {
 
   if (!isLoggedIn) {
     return (
-      // View 안에 Text, Button 컴포넌트 외 다른 텍스트 없음 확인
       <View style={styles.container}>
         <Text style={styles.errorText}>앱을 사용하려면 인증이 필요합니다.</Text>
         <Text style={styles.infoText}>네트워크 연결을 확인 후 다시 시도해주세요.</Text>
@@ -33,17 +29,39 @@ const AppContent = () => {
     );
   }
 
-  // GardenProvider, AppNavigator 외 다른 텍스트 없음 확인
   return (
     <GardenProvider>
-      <AppNavigator />
+      <MainApp />
     </GardenProvider>
   );
 };
 
+const MainApp = () => {
+  const { isLoadingGarden, gardenError, refreshCurrentGarden } = useGarden();
+
+  if (isLoadingGarden) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#2ECC71" />
+        <Text style={styles.statusText}>정원 정보를 불러오는 중...</Text>
+      </View>
+    );
+  }
+
+  if (gardenError) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>정원 정보를 가져오지 못했습니다.</Text>
+        <Text style={styles.infoText}>{gardenError}</Text>
+        <Button title="다시 시도" onPress={() => {refreshCurrentGarden()}} />
+      </View>
+    );
+  }
+  return <AppNavigator />;
+};
+
 export default function App() {
   return (
-    // Provider, Container 컴포넌트 사이에 다른 텍스트 없음 확인
     <SafeAreaProvider>
       <AuthProvider>
         <NavigationContainer>
