@@ -2,8 +2,10 @@ const express = require('express');
 const router = express.Router();
 const db = require('../models'); // Sequelize 모델
 const authMiddleware = require('../middlewares/authMiddleware'); // 인증 미들웨어
-const { uploadSnapshot } = require('../middlewares/uploadMiddleware');
+const uploadSnapshot = require('../middlewares/uploadMiddleware');
 const { Op } = require('sequelize'); // Sequelize 연산자
+
+const SNAPSHOT_STORAGE_BASE_PATH = path.join(__dirname, '..', 'storage', 'snapshots');
 
 const calculateSkyColor = (flowers) => {
 //   if (!flowers || flowers.length === 0) {
@@ -300,7 +302,7 @@ router.get('/completed', authMiddleware, async (req, res, next) => {
         completed_at: garden.completed_at ? garden.completed_at.toISOString() : null,
         // snapshot_image_url 가공
         snapshot_image_url: garden.snapshot_image_url
-          ? `/api/gardens/snapshot/${garden.snapshot_image_url}` // API 엔드포인트 경로
+          ? `/gardens/snapshot/${garden.snapshot_image_url}` // API 엔드포인트 경로
           : null, // 스냅샷이 없는 경우 null
       })),
       pages: {
@@ -349,11 +351,61 @@ router.get('/:garden_id', authMiddleware, async (req, res, next) => {
       name: garden.name,
       completed_at: garden.completed_at ? garden.completed_at.toISOString() : null,
       snapshot_image_url: garden.snapshot_image_url
-        ? `/api/gardens/snapshot/${garden.snapshot_image_url}` // API 엔드포인트 경로
+        ? `/gardens/snapshot/${garden.snapshot_image_url}` // API 엔드포인트 경로
         : null,
     });
   } catch (error) {
     console.error('GET /gardens/:garden_id Error:', error);
+    next(error);
+  }
+});
+
+/**
+ * @route   GET /gardens/snapshot/:filename
+ * @desc    저장된 정원 스냅샷 이미지 파일 제공
+ * @access  Private (해당 정원 소유자만 접근 가능)
+ */
+router.get('/snapshot/:filename', authMiddleware, async (req, res, next) => {
+  const userId = req.user.user_id;
+  const { filename } = req.params;
+
+  try {
+    if (filename.includes('..') || filename.includes('/')) {
+      return res.status(400).json({ message: '잘못된 파일명입니다.' });
+    }
+
+    const garden = await db.Garden.findOne({
+      where: {
+        user_id: userId,
+        snapshot_image_url: filename, // DB에 저장된 파일명과 요청된 파일명이 일치해야 함
+      },
+      attributes: ['garden_id'], // 실제 정원 데이터는 필요 없고, 존재 여부와 권한만 확인
+    });
+
+    if (!garden) {
+      return res.status(404).json({ message: '스냅샷을 찾을 수 없거나 접근 권한이 없습니다.' });
+    }
+
+    const filePath = path.join(SNAPSHOT_STORAGE_BASE_PATH, filename);
+
+    try {
+      await fs.access(filePath, fs.constants.F_OK | fs.constants.R_OK); // 파일 존재 및 읽기 권한 확인
+    } catch (fileAccessError) {
+      console.error(`Snapshot file not found on disk: ${filePath}`, fileAccessError);
+      return res.status(404).json({ message: '스냅샷 파일을 서버에서 찾을 수 없습니다.' });
+    }
+
+    res.sendFile(filePath, (err) => {
+      if (err) {
+        console.error(`Error sending snapshot file ${filePath}:`, err);
+        if (!res.headersSent) {
+          res.status(500).json({ message: '이미지를 전송하는 중 오류가 발생했습니다.' });
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error(`GET /api/gardens/snapshot/${filename} Error:`, error);
     next(error);
   }
 });
