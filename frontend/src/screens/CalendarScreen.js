@@ -22,6 +22,7 @@ import NavigationBar from '../components/NavigationBar';
 import useScreenTransition from '../hooks/useScreenTransition';
 import { getAppCurrentDate, formatDateToYYYYMMDD } from '../utils/dateUtils';
 import IMAGES from '../constants/images'; // 이미지 상수 import
+import { getMonthlyRecords } from '../api/apiClient';
 
 // --- 한글 언어 설정 ---
 LocaleConfig.locales['ko'] = {
@@ -160,6 +161,8 @@ const CalendarScreen = ({ navigation }) => {
   const handleNavigate = screenTransition.handleNavigate || (() => {});
   const { width, height: windowHeight } = useWindowDimensions(); // 화면 크기 정보
 
+  const isInitialCal = useRef(false);
+
   // 특정 월의 감정 마킹 정보 업데이트 함수
   const updateMarkingsForMonth = useCallback(async (year, month, appTodayDate) => {
     // 입력값 유효성 검사
@@ -168,14 +171,14 @@ const CalendarScreen = ({ navigation }) => {
         return;
     }
 
-    setIsLoading(true); // 로딩 시작
+    // setIsLoading(true); // 로딩 시작
     const daysInMonth = getDaysInMonth(year, month); // 해당 월의 모든 날짜 가져오기
 
     // getDaysInMonth 결과 유효성 검사
     if (!Array.isArray(daysInMonth)) {
       console.error('[CalendarScreen] getDaysInMonth did not return an array for', year, month);
       setMarkedDates({ [appTodayDate]: { isToday: true } }); // 최소한 오늘 날짜 마킹
-      setIsLoading(false);
+      // setIsLoading(false);
       return;
     }
     if (daysInMonth.length === 0) { // 해당 월에 날짜가 없는 경우 (이론상 발생 어려움)
@@ -224,7 +227,7 @@ const CalendarScreen = ({ navigation }) => {
       // 에러 발생 시 최소한 오늘 날짜는 표시
       setMarkedDates({ [appTodayDate]: { isToday: true } });
     } finally {
-       setIsLoading(false); // 로딩 종료
+       // setIsLoading(false); // 로딩 종료
     }
   }, []); // 의존성 배열 비움 (함수 자체는 재생성되지 않음)
 
@@ -248,6 +251,35 @@ const CalendarScreen = ({ navigation }) => {
           setCalendarFocusDateString(formattedAppDate); // 달력 초기 포커스 설정
           setCurrentYearMonth({ year: initialYear, month: initialMonth }); // 현재 년/월 설정
 
+          if (!isInitialCal.current) {
+            console.log("[CalendarScreen] 최초 동기화 시도:", initialYear, initialMonth);
+            try {
+              const response = await getMonthlyRecords(initialYear, initialMonth);
+              // CalenderResDTO 형식의 응답 데이터 (response.data)
+              const serverRecords = response.data?.monthly_records;
+
+              if (Array.isArray(serverRecords)) {
+                const recordsToStore = serverRecords.map(record => [
+                  `${EMOTION_LOG_PREFIX}${record.record_date}`,
+                  record.emotion_type.name // 감정 이름을 emotionKey로 사용
+                ]);
+
+                if (recordsToStore.length > 0) {
+                  await AsyncStorage.multiSet(recordsToStore);
+                  console.log("[CalendarScreen] API 데이터를 AsyncStorage에 저장 완료.");
+                }
+              } else {
+                console.warn("[CalendarScreen] API 응답에 monthly_records가 없거나 형식이 올바르지 않습니다.");
+              }
+              // 성공적으로 동기화 완료 시 플래그 설정
+              isInitialSyncDoneRef.current = true;
+
+            } catch (apiError) {
+              console.error("[CalendarScreen] API 호출 또는 데이터 저장 실패:", apiError);
+              // API 실패 시에도 다음 단계 (로컬 데이터 로드)는 진행
+            }
+          }
+
           // 초기 월 마킹 정보 로드
           await updateMarkingsForMonth(initialYear, initialMonth, formattedAppDate);
 
@@ -262,7 +294,9 @@ const CalendarScreen = ({ navigation }) => {
             setCurrentYearMonth({ year: today.getFullYear(), month: today.getMonth() + 1 });
             setMarkedDates({ [formattedToday]: { isToday: true } }); // 최소 마킹
             setIsLoading(false); // 로딩 종료
-          }
+          } //finally {
+            //if(isActive) setIsLoading(false); // 모든 작업 완료 후 로딩 종료
+        //}
         }
         // updateMarkingsForMonth 내부에서 로딩 종료
       };
