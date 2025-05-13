@@ -272,7 +272,7 @@ const CalendarScreen = ({ navigation }) => {
                 console.warn("[CalendarScreen] API 응답에 monthly_records가 없거나 형식이 올바르지 않습니다.");
               }
               // 성공적으로 동기화 완료 시 플래그 설정
-              isInitialSyncDoneRef.current = true;
+              isInitialCal.current = true;
 
             } catch (apiError) {
               console.error("[CalendarScreen] API 호출 또는 데이터 저장 실패:", apiError);
