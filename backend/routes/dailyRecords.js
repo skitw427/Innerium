@@ -62,7 +62,7 @@ router.post('/', authMiddleware, async (req, res, next) => {
     }
     const currentGardenId = user.current_garden_id;
 
-    let recordDateToUse;
+    let recordDate;
     if (clientRecordDateString) {
       const parsedDate = new Date(clientRecordDateString); // ISO 문자열을 Date 객체로 파싱
       if (isNaN(parsedDate.getTime())) { // 유효한 날짜인지 확인
@@ -72,15 +72,14 @@ router.post('/', authMiddleware, async (req, res, next) => {
       const year = parsedDate.getUTCFullYear();
       const month = String(parsedDate.getUTCMonth() + 1).padStart(2, '0');
       const day = String(parsedDate.getUTCDate()).padStart(2, '0');
-      recordDateToUse = `${year}-${month}-${day}`;
+      recordDate = `${year}-${month}-${day}`;
     } else {
       // 클라이언트에서 날짜를 보내지 않은 경우 (일반적인 상황), 서버의 현재 날짜 사용
-      recordDateToUse = getRecordDate();
+      recordDate = getRecordDate();
     }
-    console.log(`[Backend] Using record_date: ${recordDateToUse} (Client sent: ${clientRecordDateString || 'N/A'})`);
+    console.log(`[Backend] Using record_date: ${recordDate} (Client sent: ${clientRecordDateString || 'N/A'})`);
 
     // --- 3. 오늘 날짜로 이미 기록이 있는지 확인 ---
-    const recordDate = getRecordDate();
     const existingRecord = await db.DailyRecord.findOne({
       where: {
         user_id: userId,
@@ -92,7 +91,10 @@ router.post('/', authMiddleware, async (req, res, next) => {
 
     if (existingRecord) {
       await transaction.rollback();
-      return res.status(400).json({ message: '오늘의 감정 기록은 이미 존재합니다. 하루에 한 번만 기록할 수 있습니다.' });
+      const message = clientRecordDateString
+        ? `선택하신 날짜(${recordDate})의 감정 기록은 이미 존재합니다.`
+        : '오늘의 감정 기록은 이미 존재합니다. 하루에 한 번만 기록할 수 있습니다.';
+      return res.status(400).json({ message });
     }
 
     // --- 4. EmotionType 유효성 검사 (DB에 해당 ID가 존재하는지) ---

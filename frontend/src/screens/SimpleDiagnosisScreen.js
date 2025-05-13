@@ -281,21 +281,22 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
         if (prioritySelectedEmotion && prioritySelectedEmotion === secondEmotion) {
           // 사용자가 원래의 두 번째 감정을 우선으로 선택했다면 스왑
           apiFirstEmotionName = secondEmotion;
-          apiFirstEmotionDegree = secondDegree; // 어차피 firstDegree와 같음
+          apiFirstEmotionDegree = secondDegree;
           apiSecondEmotionName = firstEmotion;
-          apiSecondEmotionDegree = firstDegree; // 어차피 secondDegree와 같음
+          apiSecondEmotionDegree = firstDegree;
         }
       }
     }
 
-    firstEmotion = apiFirstEmotionName;
-    firstDegree = apiFirstEmotionDegree;
-    secondEmotion = apiSecondEmotionName;
-    secondDegree = apiSecondEmotionDegree;
+    setFirstEmotion(apiFirstEmotionName);
+    setFirstDegree(apiFirstEmotionDegree);
+    setSecondEmotion(apiSecondEmotionName);
+    setSecondDegree(apiSecondEmotionDegree);
+
 
     // --- 1. 서버에 전송할 데이터 준비 ---
-    const firstEmotionId = emotionNameToIdMap[firstEmotion] || null;
-    const firstEmotionAmount = firstDegree; // 사용자가 1~7 사이 숫자를 선택하므로, 이미 숫자
+    const firstEmotionId = emotionNameToIdMap[apiFirstEmotionName] || null;
+    const firstEmotionAmount = apiFirstEmotionDegree; // 사용자가 1~7 사이 숫자를 선택하므로, 이미 숫자
 
     // API 요청 본문 객체 초기화 (필수 필드만 포함하도록 구성)
     const recordData = {}; // 빈 객체로 시작
@@ -309,7 +310,7 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
     } else {
       // 이 경우는 firstEmotion이 emotionNameToIdMap에 없거나, firstDegree가 설정되지 않은 치명적 오류.
       console.error("Validation Error: First emotion data is missing or invalid.", {
-        firstEmotion, firstDegree, firstEmotionId, firstEmotionAmount
+        apiFirstEmotionName, apiFirstEmotionDegree, firstEmotionId, firstEmotionAmount
       });
       Alert.alert("오류", "첫 번째 감정 정보가 올바르지 않아 저장할 수 없습니다.\n앱을 다시 시작해주세요.");
       setIsSubmittingResult(false);
@@ -318,9 +319,9 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
 
     // 두 번째 감정 데이터 처리
     // 조건: secondEmotion이 존재하고, '없음'이 아니며, secondDegree도 null이 아닌 경우
-    if (secondEmotion && secondEmotion !== '없음' && secondDegree !== null) {
-      const tempSecondEmotionId = emotionNameToIdMap[secondEmotion] || null;
-      const tempSecondEmotionAmount = secondDegree; // 사용자가 1~7 사이 숫자를 선택
+    if (apiSecondEmotionName && apiSecondEmotionName !== '없음' && apiSecondEmotionDegree !== null) {
+      const tempSecondEmotionId = emotionNameToIdMap[apiSecondEmotionName] || null;
+      const tempSecondEmotionAmount = apiSecondEmotionDegree; // 사용자가 1~7 사이 숫자를 선택
 
       // 두 번째 감정 ID와 정도가 모두 유효한 숫자인 경우에만 recordData에 추가
       if (tempSecondEmotionId !== null && typeof tempSecondEmotionId === 'number' &&
@@ -329,7 +330,7 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
         recordData.second_emotion_amount = tempSecondEmotionAmount;
       } else {
         console.warn("Second emotion data was intended but could not be resolved to valid ID/Amount. This should not happen if '없음' was chosen.", {
-          secondEmotion, secondDegree, tempSecondEmotionId, tempSecondEmotionAmount
+          apiSecondEmotionName, apiSecondEmotionDegree, tempSecondEmotionId, tempSecondEmotionAmount
         });
       }
     }
@@ -356,29 +357,16 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
       let primaryEmotion = "감정 정보 없음";
       let primaryEmotionKey = null;
 
-      if (firstEmotion && firstDegree !== null) {
-        if (secondEmotion === '없음' || !secondEmotion || secondDegree === null) {
-          primaryEmotion = firstEmotion;
-        } else if (secondEmotion && secondDegree !== null) {
-          if (firstDegree > secondDegree) {
-            primaryEmotion = firstEmotion;
-          } else if (secondDegree > firstDegree) {
-            primaryEmotion = secondEmotion;
-          } else {
-            if (prioritySelectedEmotion) {
-              primaryEmotion = prioritySelectedEmotion;
-            } else {
-              primaryEmotion = firstEmotion;
+      if (apiFirstEmotionName && apiFirstEmotionDegree !== null) primaryEmotion = apiFirstEmotionName;
+      else {
+              primaryEmotion = apiFirstEmotionName;
               console.warn("Priority emotion was expected but not set. Defaulting to first emotion.");
             }
-          }
-        }
-      }
 
       let resultAlertMessage = `오늘 주로 느낀 감정은 '${primaryEmotion}'입니다.`;
       if (primaryEmotion === "감정 정보 없음") {
-          if (firstEmotion) {
-              primaryEmotion = firstEmotion;
+          if (apiFirstEmotionName) {
+              primaryEmotion = apiFirstEmotionName;
               resultAlertMessage = `오늘 주로 느낀 감정은 '${primaryEmotion}'입니다.`;
           } else {
               resultAlertMessage = "감정 정보를 확인할 수 없습니다.";
@@ -388,8 +376,8 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
 
       // 디버깅을 위한 결과 로그 출력 (기존 코드)
       console.log("--- 진단 결과 데이터 (For AsyncStorage & Navigation) ---");
-      console.log("첫번째 감정:", firstEmotion, "| 정도:", firstDegree);
-      console.log("두번째 감정:", secondEmotion, "| 정도:", secondDegree);
+      console.log("첫번째 감정:", apiFirstEmotionName, "| 정도:", apiFirstEmotionDegree);
+      console.log("두번째 감정:", apiSecondEmotionName, "| 정도:", apiSecondEmotionDegree);
       console.log("우선순위 선택 감정:", prioritySelectedEmotion);
       console.log("주요 감정:", primaryEmotion, "| 키:", primaryEmotionKey);
       console.log("----------------------------------------------------");

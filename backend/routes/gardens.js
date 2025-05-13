@@ -73,26 +73,36 @@ router.get('/current', authMiddleware, async (req, res, next) => {
       order: [['record_date', 'ASC']], // 시간순 정렬
     });
 
-    const skyColor = calculateSkyColor(flowersInGarden.map(f => f.EmotionType)); // EmotionType 객체 전달
+    const skyColor = calculateSkyColor(flowersInGarden.map(f => f.emotionType)); // 'emotionType'으로 수정
 
     res.status(200).json({
-      garden_id: currentGarden.garden_id.toString(), // 명세상 string
+      garden_id: currentGarden.garden_id.toString(),
       tree_level: currentGarden.tree_level,
       sky_color: skyColor,
-      is_complete: !!currentGarden.completed_at, // completed_at이 있으면 true
-      flowers: flowersInGarden.map(record => ({
-        flower_instance_id: record.record_id.toString(), // DailyRecord의 ID를 꽃 인스턴스 ID로 사용
-        flower_type: {
-          id: record.ChosenFlowerType.flower_type_id,
-          image_url: record.ChosenFlowerType.image_url,
-        },
-        position: {
-          x: record.flower_pos_x,
-          y: record.flower_pos_y,
-        },
-        emotion_type_id: record.emotion_type_id,
-      })),
-      // isNewGarden: isNewGarden, // 프론트에서 새 정원 생성 여부를 알아야 한다면 추가
+      is_complete: !!currentGarden.completed_at,
+      flowers: flowersInGarden.map(record => {
+        const flowerTypeData = record.chosenFlowerType ? {
+          id: record.chosenFlowerType.flower_type_id,
+          image_url: record.chosenFlowerType.image_url,
+        } : null; // 또는 기본값 설정
+
+        if (!flowerTypeData) {
+            console.warn(`DailyRecord ID ${record.record_id} has no associated chosenFlowerType or flower_type_id is missing.`);
+        }
+
+        return {
+          flower_instance_id: record.record_id.toString(),
+          flower_type: flowerTypeData ? { // 수정된 부분
+            id: flowerTypeData.id,
+            image_url: flowerTypeData.image_url,
+          } : { id: null, image_url: null }, // flowerTypeData가 null일 경우의 처리
+          position: {
+            x: record.flower_pos_x,
+            y: record.flower_pos_y,
+          },
+          emotion_type_id: record.emotion_type_id, // 이건 DailyRecord의 직접적인 컬럼이므로 그대로 사용
+        };
+      }).filter(flower => flower && flower.flower_type && flower.flower_type.id !== null), // 만약 위에서 null을 반환했다면 필터링
     });
   } catch (error) {
     console.error('GET /gardens/current Error:', error);
