@@ -14,12 +14,21 @@ const helpIcon = require('../../assets/QuestionMark.png');
 
 // --- 나무 이미지 ---
 const treeImage = require('../../assets/Tree_0.png'); // 기본 나무 (꽃 0~1개)
-// ★★★ 추가된 나무 이미지 정의 ★★★
 const Tree_2 = require('../../assets/Tree_2.png');   // 꽃 2~3개
 const Tree_4 = require('../../assets/Tree_4.png');   // 꽃 4~5개
 const Tree_6 = require('../../assets/Tree_6.png');   // 꽃 6~7개
 const Tree_8 = require('../../assets/Tree_8.png');   // 꽃 8~9개
 const Tree_10 = require('../../assets/Tree_10.png'); // 꽃 10개 이상
+
+// ★★★ 추가된 감정 아이콘 이미지 정의 ★★★
+const emotionAgIcon = require('../../assets/Emotions/Ag.png');
+const emotionAxIcon = require('../../assets/Emotions/Ax.png');
+const emotionDgIcon = require('../../assets/Emotions/Dg.png');
+const emotionDrIcon = require('../../assets/Emotions/Dr.png');
+const emotionFIcon = require('../../assets/Emotions/F.png');
+const emotionHIcon = require('../../assets/Emotions/H.png');
+const emotionRIcon = require('../../assets/Emotions/R.png');
+const emotionSIcon = require('../../assets/Emotions/S.png');
 // ★★★ --- ★★★
 
 // --- 감정별 꽃 이미지 (객체로 그룹화) ---
@@ -197,12 +206,23 @@ const IMAGES = {
   helpIcon: helpIcon,
   // 나무 이미지들
   treeImage: treeImage, // 기본 나무
-  // ★★★ 추가된 나무 이미지 키 ★★★
   Tree_2: Tree_2,
   Tree_4: Tree_4,
   Tree_6: Tree_6,
   Tree_8: Tree_8,
   Tree_10: Tree_10,
+
+  // ★★★ 추가된 감정 아이콘 키 ★★★
+  emotionIcon: {
+    Ag: emotionAgIcon,
+    Ax: emotionAxIcon,
+    Dg: emotionDgIcon,
+    Dr: emotionDrIcon,
+    F: emotionFIcon,
+    H: emotionHIcon,
+    R: emotionRIcon,
+    S: emotionSIcon,
+  },
   // ★★★ --- ★★★
 
   // 감정별 꽃 이미지 그룹

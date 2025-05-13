@@ -1,5 +1,5 @@
 // src/screens/StorageScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
   StyleSheet,
@@ -10,38 +10,54 @@ import {
   useWindowDimensions,
   ActivityIndicator,
   Alert,
-  // Image, // 실제 이미지 표시 시 필요
+  Image, // ★★★ Image 컴포넌트 import 활성화 ★★★
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import NavigationBar from '../components/NavigationBar';
 import useScreenTransition from '../hooks/useScreenTransition';
 
-// --- API 함수 Import (나중에 실제 데이터 연동 시 필요) ---
-// import { getCompletedGardens } from '../api/apiClient';
-
-const ITEMS_PER_PAGE = 4; // 한 페이지에 보여줄 아이템 수
-const TOP_SPACE = 40; // <<< 화면 상단에 추가할 여백 크기 (조절 가능) >>>
+const ITEMS_PER_PAGE = 4;
+const TOP_SPACE = 40;
+const COMPLETED_GARDENS_KEY = '@completedGardens';
 
 const StorageScreen = ({ navigation }) => {
   const { isTransitioning, handleNavigate } = useScreenTransition();
-  const { width, height } = useWindowDimensions();
 
-  // --- 상태 변수 ---
   const [currentPage, setCurrentPage] = useState(0);
-  const [totalItems, setTotalItems] = useState(12);
-  const [isLoading, setIsLoading] = useState(false);
+  const [completedGardens, setCompletedGardens] = useState([]); // 이제 { timestamp, snapshotData } 객체 배열
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  // const [gardenData, setGardenData] = useState([]);
 
-  // --- 임시 슬롯 데이터 ---
-  const slots = Array.from({ length: totalItems }, (_, i) => ({ id: i + 1, name: `정원 ${i + 1}`, snapshot_image_url: `https://via.placeholder.com/150/aabbcc?text=Garden+${i + 1}` }));
+  const loadCompletedGardens = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const completedGardensString = await AsyncStorage.getItem(COMPLETED_GARDENS_KEY);
+      const loadedGardens = completedGardensString ? JSON.parse(completedGardensString) : [];
+      setCompletedGardens(loadedGardens);
+      setCurrentPage(0);
+    } catch (e) {
+      console.error('[StorageScreen] Failed to load completed gardens:', e);
+      setError('보관함 정보를 불러오는 데 실패했습니다.');
+      setCompletedGardens([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-  // --- 페이지네이션 계산 ---
-  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+  useFocusEffect(
+    useCallback(() => {
+      loadCompletedGardens();
+    }, [loadCompletedGardens])
+  );
+
+  const actualTotalItems = completedGardens.length;
+  const totalPages = Math.max(1, Math.ceil(actualTotalItems / ITEMS_PER_PAGE));
   const startIndex = currentPage * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
-  const itemsToShow = slots.slice(startIndex, endIndex);
+  const itemsToShow = completedGardens.slice(startIndex, endIndex); // 각 요소는 { timestamp, snapshotData }
 
-  // --- 페이지 이동 함수 ---
   const goToNextPage = () => {
     if (currentPage < totalPages - 1) setCurrentPage(currentPage + 1);
   };
@@ -49,41 +65,51 @@ const StorageScreen = ({ navigation }) => {
     if (currentPage > 0) setCurrentPage(currentPage - 1);
   };
 
-  // --- 데이터 로딩 함수 (API 연동 시 사용) ---
-  // useEffect(() => { /* ... API 로딩 로직 ... */ }, []);
-
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* 메인 컨텐츠 영역 (네비게이션 바와 분리) */}
       <View style={styles.container}>
-
-        {/* 상단 컨텐츠 영역 (그리드 + 페이지네이션 + 상단 여백) */}
-        {/* <<< contentArea 스타일에 paddingTop 추가 >>> */}
         <View style={[styles.contentArea, { paddingTop: TOP_SPACE }]}>
-          {/* 로딩 및 에러 표시 */}
-          {isLoading && <ActivityIndicator size="large" color="#00adf5" style={styles.loader} />}
-          {error && !isLoading && <Text style={styles.errorText}>{error}</Text>}
+          {isLoading && (
+            <View style={styles.centerMessageContainer}><ActivityIndicator size="large" color="#00adf5" /></View>
+          )}
+          {error && !isLoading && (
+            <View style={styles.centerMessageContainer}><Text style={styles.errorText}>{error}</Text></View>
+          )}
+          {!isLoading && !error && actualTotalItems === 0 && (
+            <View style={styles.centerMessageContainer}><Text style={styles.emptyText}>완료된 정원이 아직 없어요.</Text></View>
+          )}
 
-          {/* 4개 박스 그리드 영역 (화면 채움) */}
-          {!isLoading && !error && (
+          {!isLoading && !error && actualTotalItems > 0 && (
             <View style={styles.storageGridContainer}>
-              {itemsToShow.map((item) => (
-                <TouchableOpacity key={item.id} style={styles.storageSlotButton}>
-                  <View style={styles.slotInnerContent}>
-                    <Text style={styles.boxText}>{item.name}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-              {/* 빈 공간 채우기 (선택적) */}
-              {itemsToShow.length < ITEMS_PER_PAGE &&
-                Array.from({ length: ITEMS_PER_PAGE - itemsToShow.length }).map((_, index) => (
-                  <View key={`placeholder-${index}`} style={[styles.storageSlotButton, styles.placeholderBox]} />
-              ))}
+              {itemsToShow.map((gardenItem, index) => { // gardenItem은 { timestamp, snapshotData }
+                const slotIndex = startIndex + index + 1;
+                return (
+                  <TouchableOpacity key={gardenItem.timestamp} style={styles.storageSlotButton}>
+                    {/* ★★★ slotInnerContent 제거 또는 스타일 변경하고 Image 직접 사용 ★★★ */}
+                    {gardenItem.snapshotData ? (
+                      <Image
+                        source={{ uri: gardenItem.snapshotData }} // Data URI 사용
+                        style={styles.gardenSnapshotImage} // 새 스타일 적용
+                        resizeMode="cover" // 이미지가 뷰를 가득 채우도록
+                      />
+                    ) : (
+                      // 스냅샷 데이터가 없는 경우 (이론상 없어야 함)
+                      <View style={styles.slotInnerContent}>
+                        <Text style={styles.boxText}>{`정원 ${slotIndex}`}</Text>
+                        <Text style={styles.noSnapshotText}>이미지 없음</Text>
+                      </View>
+                    )}
+                     {/* 정원 번호 텍스트를 이미지 위에 오버레이 (선택적) */}
+                    <View style={styles.slotTextOverlay}>
+                        <Text style={styles.boxTextOverlay}>{`정원 ${slotIndex}`}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           )}
 
-          {/* 페이지네이션 컨트롤 */}
-          {!isLoading && !error && totalItems > 0 && (
+          {!isLoading && !error && totalPages > 1 && (
             <View style={styles.paginationContainer}>
               <TouchableOpacity onPress={goToPreviousPage} disabled={currentPage === 0} style={[styles.arrowButton, currentPage === 0 && styles.disabledArrow]}>
                 <Text style={styles.arrowText}>{'<'}</Text>
@@ -96,7 +122,6 @@ const StorageScreen = ({ navigation }) => {
           )}
         </View>
 
-        {/* 하단 네비게이션 바 */}
         <NavigationBar
           onNavigate={(screen) => handleNavigate(navigation, screen)}
           isTransitioning={isTransitioning}
@@ -107,7 +132,6 @@ const StorageScreen = ({ navigation }) => {
   );
 };
 
-// 스타일 정의
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -116,62 +140,85 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'space-between',
-    // <<< container의 paddingTop 제거 (contentArea로 이동) >>>
   },
   contentArea: {
     flex: 1,
-    // <<< 여기에 paddingTop 추가하여 상단 여백 생성 >>>
-    // paddingTop 값은 TOP_SPACE 상수로 조절 가능
   },
-  loader: {
+  centerMessageContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  errorText: {
-    flex: 1,
-    textAlign: 'center',
-    textAlignVertical: 'center',
-    color: 'red',
-    fontSize: 16,
     padding: 20,
   },
+  errorText: {
+    color: 'red',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  emptyText: {
+    color: '#555',
+    fontSize: 16,
+    textAlign: 'center',
+  },
   storageGridContainer: {
-    flex: 1, // 페이지네이션 제외한 contentArea의 남은 공간 모두 차지
+    flex: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
     padding: 5,
+    alignContent: 'flex-start',
   },
-  storageSlotButton: {
+  storageSlotButton: { // TouchableOpacity가 전체 슬롯 영역
     width: '50%',
-    height: '50%',
+    height: '50%', // 또는 고정 높이
     padding: 8,
+    position: 'relative', // 오버레이 텍스트를 위한 기준점
   },
-  slotInnerContent: {
+  // ★★★ slotInnerContent 스타일은 스냅샷 없을 때 fallback용으로 남겨두거나 수정 ★★★
+  slotInnerContent: { // 스냅샷 없을 때의 내용물 스타일
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#f0f0f0', // 스냅샷 없을 때 배경색
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#e0e0e0',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    overflow: 'hidden',
   },
-  boxText: {
+  // ★★★ 스냅샷 이미지 스타일 추가 ★★★
+  gardenSnapshotImage: {
+    flex: 1, // 부모(TouchableOpacity)의 크기를 모두 차지
+    borderRadius: 10, // 부모와 동일한 borderRadius
+    // borderWidth: 1, // 선택적 테두리
+    // borderColor: '#ccc', // 선택적 테두리 색상
+  },
+  boxText: { // 스냅샷 없을 때의 텍스트
     fontSize: 16,
     fontWeight: 'bold',
     color: '#555',
     textAlign: 'center',
-    paddingHorizontal: 5,
   },
-  placeholderBox: {
-    padding: 8,
+  noSnapshotText: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 5,
   },
+  // ★★★ 이미지 위에 텍스트 오버레이 스타일 (선택적) ★★★
+  slotTextOverlay: {
+      position: 'absolute',
+      bottom: 10, // 이미지 하단에서의 위치
+      left: 10,
+      right: 10,
+      backgroundColor: 'rgba(0, 0, 0, 0.4)', // 반투명 배경
+      paddingVertical: 3,
+      paddingHorizontal: 5,
+      borderRadius: 5,
+  },
+  boxTextOverlay: {
+      fontSize: 14,
+      fontWeight: 'bold',
+      color: '#fff', // 흰색 텍스트
+      textAlign: 'center',
+  },
+  // ★★★ --- ★★★
   paginationContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
