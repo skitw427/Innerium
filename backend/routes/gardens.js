@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../models'); // Sequelize 모델
-const authMiddleware = require('../middlewares/authMiddleware'); // 인증 미들웨어 (경로 확인)
+const authMiddleware = require('../middlewares/authMiddleware'); // 인증 미들웨어
+const { uploadSnapshot } = require('../middlewares/uploadMiddleware');
 const { Op } = require('sequelize'); // Sequelize 연산자
 
-// Helper function to calculate sky color based on flowers (Simplified)
 const calculateSkyColor = (flowers) => {
 //   if (!flowers || flowers.length === 0) {
 //     return '#87CEEB'; // Default sky blue
@@ -102,54 +102,123 @@ router.get('/current', authMiddleware, async (req, res, next) => {
  * @desc    정원 완성 처리 (이름 결정)
  * @access  Private
  */
-router.post('/:garden_id/complete', authMiddleware, async (req, res, next) => {
-  const userId = req.user.user_id;
-  const { garden_id } = req.params;
-  const { name } = req.body;
+router.post(
+  '/:garden_id/complete',
+  authMiddleware,
+  uploadSnapshot.single('snapshotImage'),
+  async (req, res, next) => {
+    const userId = req.user.user_id;
+    const { garden_id } = req.params;
+    const { name } = req.body;
 
-  if (!name || typeof name !== 'string' || name.trim() === '') {
-    return res.status(400).json({ message: '정원 이름(name)이 필요합니다.' });
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      if (req.file && req.file.path) {
+        try { await fs.unlink(req.file.path); } catch (e) { console.error("Error deleting temp file on name validation fail:", e); }
+      }
+      return res.status(400).json({ message: '정원 이름(name)이 필요합니다.' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: '정원 스냅샷 이미지 파일(snapshotImage)이 필요합니다.' });
+    }
+
+    const tempFilePath = req.file.path; // multer가 저장한 임시 파일의 전체 경로
+    const originalFileExtension = path.extname(req.file.originalname);
+
+    // 최종 파일명 결정 (user_id와 garden_id 포함)
+    const finalFilename = `user_${userId}_garden_${garden_id}_${Date.now()}${originalFileExtension}`;
+    const finalFilePath = path.join(path.dirname(tempFilePath), finalFilename); // 임시 파일과 같은 디렉토리에 최종 파일명으로
+
+    let transaction;
+    try {
+      transaction = await db.sequelize.transaction();
+
+      const garden = await db.Garden.findOne({
+        where: { garden_id: garden_id, user_id: userId },
+        transaction,
+      });
+
+      if (!garden) {
+        await fs.unlink(tempFilePath); // 임시 파일 삭제
+        await transaction.rollback();
+        return res.status(404).json({ message: '해당 정원을 찾을 수 없거나 권한이 없습니다.' });
+      }
+
+      if (garden.completed_at) {
+        await fs.unlink(tempFilePath); // 임시 파일 삭제
+        await transaction.rollback();
+        return res.status(400).json({ message: '이미 완성된 정원입니다.' });
+      }
+
+      // 파일명 변경 (임시 -> 최종)
+      try {
+        await fs.rename(tempFilePath, finalFilePath);
+        console.log(`File renamed from ${tempFilePath} to ${finalFilePath}`);
+      } catch (renameError) {
+        console.error('Error renaming file:', renameError);
+        await fs.unlink(tempFilePath); // 이름 변경 실패 시 임시 파일 삭제
+        throw renameError; // 에러를 다시 던져서 트랜잭션 롤백 및 전체 에러 처리
+      }
+
+
+      // (선택적) 이전에 스냅샷이 있었다면, 이전 파일 삭제
+      if (garden.snapshot_image_url) {
+        const oldSnapshotPath = path.join(__dirname, '..', 'storage', 'snapshots', garden.snapshot_image_url);
+        try {
+          await fs.access(oldSnapshotPath);
+          await fs.unlink(oldSnapshotPath);
+          console.log(`Old snapshot deleted: ${oldSnapshotPath}`);
+        } catch (err) {
+          console.warn(`Could not delete old snapshot ${oldSnapshotPath}:`, err.message);
+        }
+      }
+
+      // 정원 정보 업데이트 (최종 파일명 사용)
+      garden.name = name.trim();
+      garden.completed_at = new Date();
+      garden.snapshot_image_url = finalFilename; // 최종 파일명 저장
+      await garden.save({ transaction });
+
+      const user = await db.User.findByPk(userId, { transaction });
+      if (user && user.current_garden_id === parseInt(garden_id, 10)) {
+        await user.update({ current_garden_id: null }, { transaction });
+      }
+
+      await transaction.commit();
+
+      res.status(200).json({
+        garden_id: garden.garden_id.toString(),
+        name: garden.name,
+        completed_at: garden.completed_at.toISOString(),
+        snapshot_image_url: `/api/gardens/snapshot/${finalFilename}`, // 최종 파일명으로 URL 생성
+      });
+
+    } catch (error) {
+      if (transaction) await transaction.rollback();
+      try {
+        await fs.access(finalFilePath); // 최종 파일 경로가 존재하는지 (이름 변경 후 에러 시)
+        await fs.unlink(finalFilePath);
+        console.log(`Cleaned up final file on error: ${finalFilePath}`);
+      } catch (e) {
+        // finalFilePath가 없으면 tempFilePath를 삭제 시도
+        try {
+            await fs.access(tempFilePath);
+            await fs.unlink(tempFilePath);
+            console.log(`Cleaned up temp file on error: ${tempFilePath}`);
+        } catch (e2) {
+            // 둘 다 없거나 삭제 실패해도 일단 로깅만
+            console.error("Error cleaning up snapshot file on main error:", e, e2);
+        }
+      }
+
+      console.error('POST /gardens/:garden_id/complete Error:', error);
+      if (error instanceof multer.MulterError) {
+        return res.status(400).json({ message: error.message });
+      }
+      next(error);
+    }
   }
-
-  try {
-    const garden = await db.Garden.findOne({
-      where: {
-        garden_id: garden_id,
-        user_id: userId,
-      },
-    });
-
-    if (!garden) {
-      return res.status(404).json({ message: '해당 정원을 찾을 수 없거나 권한이 없습니다.' });
-    }
-
-    if (garden.completed_at) {
-      return res.status(400).json({ message: '이미 완성된 정원입니다.' });
-    }
-
-    // 정원 정보 업데이트
-    garden.name = name.trim();
-    garden.completed_at = new Date(); // 현재 시간으로 완성 시간 설정
-    // garden.snapshot_image_url = `https://example.com/snapshots/${garden.garden_id}.png`; // 임시 스냅샷 URL 또는 실제 생성 로직
-    await garden.save();
-
-    // 사용자의 current_garden_id를 null로 설정 (새 정원을 시작할 수 있도록)
-    const user = await db.User.findByPk(userId);
-    if (user && user.current_garden_id === garden.garden_id) {
-      await user.update({ current_garden_id: null });
-    }
-
-    res.status(200).json({
-      garden_id: garden.garden_id.toString(),
-      name: garden.name,
-      completed_at: garden.completed_at.toISOString(),
-      snapshot_image_url: garden.snapshot_image_url, // DB에 저장된 값 또는 생성된 값
-    });
-  } catch (error) {
-    console.error('POST /gardens/:garden_id/complete Error:', error);
-    next(error);
-  }
-});
+);
 
 /**
  * @route   PATCH /gardens/:garden_id
@@ -201,11 +270,11 @@ router.patch('/:garden_id', authMiddleware, async (req, res, next) => {
  */
 router.get('/completed', authMiddleware, async (req, res, next) => {
   const userId = req.user.user_id;
-  const page = parseInt(req.query.page, 10) || 0; // 기본값 0페이지
-  const size = parseInt(req.query.size, 10) || 10; // 기본 페이지 크기 10
+  let page = parseInt(req.query.page, 10);
+  if (isNaN(page) || page < 0) page = 0; // 기본값 또는 유효하지 않은 값 처리
 
-  if (page < 0) return res.status(400).json({ message: '페이지 번호는 0 이상이어야 합니다.' });
-  if (size <= 0) return res.status(400).json({ message: '페이지 크기는 0보다 커야 합니다.' });
+  let size = parseInt(req.query.size, 10);
+  if (isNaN(size) || size <= 0) size = 10; // 기본값 또는 유효하지 않은 값 처리
 
   const offset = page * size;
   const limit = size;
@@ -214,10 +283,10 @@ router.get('/completed', authMiddleware, async (req, res, next) => {
     const { count, rows } = await db.Garden.findAndCountAll({
       where: {
         user_id: userId,
-        completed_at: { [Op.ne]: null }, // completed_at이 null이 아닌 정원
+        completed_at: { [db.Sequelize.Op.not]: null }, // Op.ne 대신 Op.not 사용 (Sequelize v5+ 권장)
       },
-      attributes: ['garden_id', 'name', 'completed_at', 'snapshot_image_url'],
-      order: [['completed_at', 'DESC']], // 최근 완성 순
+      attributes: ['garden_id', 'name', 'completed_at', 'snapshot_image_url'], // 필요한 속성 명시
+      order: [['completed_at', 'DESC']],
       offset: offset,
       limit: limit,
     });
@@ -229,14 +298,18 @@ router.get('/completed', authMiddleware, async (req, res, next) => {
         garden_id: garden.garden_id.toString(),
         name: garden.name,
         completed_at: garden.completed_at ? garden.completed_at.toISOString() : null,
-        snapshot_image_url: garden.snapshot_image_url,
+        // snapshot_image_url 가공
+        snapshot_image_url: garden.snapshot_image_url
+          ? `/api/gardens/snapshot/${garden.snapshot_image_url}` // API 엔드포인트 경로
+          : null, // 스냅샷이 없는 경우 null
       })),
       pages: {
-        pageNumber: page,
-        pageSize: limit,
+        pageNumber: page, // 클라이언트가 요청한 페이지 번호 그대로
+        pageSize: limit,  // 실제 적용된 페이지 크기
         totalElements: count,
         totalPages: totalPages,
-        isLast: page >= totalPages - 1,
+        // isLast 계산 시, totalPages가 0인 경우 (항목이 없을 때) page >= -1 이 되어 true가 될 수 있으므로 주의
+        isLast: count === 0 ? true : page >= totalPages - 1,
       },
     });
   } catch (error) {
@@ -261,8 +334,6 @@ router.get('/:garden_id', authMiddleware, async (req, res, next) => {
         user_id: userId, // 본인 정원만 조회 가능
       },
       attributes: ['garden_id', 'name', 'completed_at', 'snapshot_image_url', 'tree_level'],
-      // 만약 이 API가 꽃 정보도 함께 보여줘야 한다면 include 추가
-      // include: [{ model: db.DailyRecord, as: 'DailyRecords', include: [...] }]
     });
 
     if (!garden) {
@@ -277,11 +348,9 @@ router.get('/:garden_id', authMiddleware, async (req, res, next) => {
       garden_id: garden.garden_id.toString(),
       name: garden.name,
       completed_at: garden.completed_at ? garden.completed_at.toISOString() : null,
-      snapshot_image_url: garden.snapshot_image_url,
-      // tree_level: garden.tree_level, // 필요시 추가
-      // is_complete: !!garden.completed_at, // 필요시 추가
-      // sky_color: ..., // 필요시 추가 (계산 로직 필요)
-      // flowers: ..., // 필요시 추가 (DailyRecord 조회 로직 필요)
+      snapshot_image_url: garden.snapshot_image_url
+        ? `/api/gardens/snapshot/${garden.snapshot_image_url}` // API 엔드포인트 경로
+        : null,
     });
   } catch (error) {
     console.error('GET /gardens/:garden_id Error:', error);
