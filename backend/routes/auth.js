@@ -138,13 +138,13 @@ router.post('/login', async (req, res, next) => {
 });
 
 /**
- * @route   GET /auth/token
+ * @route   POST /auth/token
  * @desc    사용자 인증 토큰 재발급
  * @access  Public (provider_user_id 기반)
  * Req: Body { provider_user_id: string }
  * Res: Body { provider_user_id: string, access_token: string }
  */
-router.get('/token', async (req, res, next) => {
+router.post('/token', async (req, res, next) => {
   const { provider_user_id } = req.body;
 
   if (!provider_user_id) {
@@ -169,7 +169,7 @@ router.get('/token', async (req, res, next) => {
       access_token: accessToken,
     });
   } catch (error) {
-    console.error('GET /auth/token Error:', error);
+    console.error('POST /auth/token Error:', error);
     next(error);
   }
 });
