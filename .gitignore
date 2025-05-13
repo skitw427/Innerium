@@ -8,3 +8,6 @@ yarn-error.log*
 
 dist/
 build/
+
+cloudbuild.yaml
+env_file.yaml

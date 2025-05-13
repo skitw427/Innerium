@@ -2,6 +2,14 @@ const express = require('express');
 const app = express();
 const db = require('./models');
 const port = process.env.PORT || 3000; // 포트 설정 (환경 변수 또는 기본값 3000)
+const fs = require('fs');
+const path = require('path');
+
+const SNAPSHOT_DIR = path.join(__dirname, 'storage', 'snapshots');
+if (!fs.existsSync(SNAPSHOT_DIR)) {
+  fs.mkdirSync(SNAPSHOT_DIR, { recursive: true });
+  console.log(`Snapshot directory created: ${SNAPSHOT_DIR}`);
+}
 
 // Body parser 미들웨어 설정 (POST 요청의 body를 읽기 위해)
 app.use(express.json());
