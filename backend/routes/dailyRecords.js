@@ -22,6 +22,7 @@ router.post('/', authMiddleware, async (req, res, next) => {
     first_emotion_amount,
     second_emotion_id, // 선택적
     second_emotion_amount, // 선택적
+    record_date: clientRecordDateString,
   } = req.body;
 
   let transaction;
@@ -60,6 +61,23 @@ router.post('/', authMiddleware, async (req, res, next) => {
       return res.status(400).json({ message: '현재 진행 중인 정원이 없습니다. 먼저 정원을 시작해주세요.' });
     }
     const currentGardenId = user.current_garden_id;
+
+    let recordDateToUse;
+    if (clientRecordDateString) {
+      const parsedDate = new Date(clientRecordDateString); // ISO 문자열을 Date 객체로 파싱
+      if (isNaN(parsedDate.getTime())) { // 유효한 날짜인지 확인
+        await transaction.rollback();
+        return res.status(400).json({ message: '제공된 record_date가 유효한 날짜 형식이 아닙니다.' });
+      }
+      const year = parsedDate.getUTCFullYear();
+      const month = String(parsedDate.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(parsedDate.getUTCDate()).padStart(2, '0');
+      recordDateToUse = `${year}-${month}-${day}`;
+    } else {
+      // 클라이언트에서 날짜를 보내지 않은 경우 (일반적인 상황), 서버의 현재 날짜 사용
+      recordDateToUse = getRecordDate();
+    }
+    console.log(`[Backend] Using record_date: ${recordDateToUse} (Client sent: ${clientRecordDateString || 'N/A'})`);
 
     // --- 3. 오늘 날짜로 이미 기록이 있는지 확인 ---
     const recordDate = getRecordDate();

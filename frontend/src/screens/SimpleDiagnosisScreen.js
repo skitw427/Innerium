@@ -1,5 +1,6 @@
 // src/screens/SimpleDiagnosisScreen.js
 import React, { useState, useEffect, useRef } from 'react';
+import { saveDailyRecord } from '../api/apiClient';
 import {
   StyleSheet,
   View,
@@ -24,6 +25,16 @@ const emotionToKeyMap = {
   '분노': 'Ag', '두려움': 'F', '갈망': 'Dr', '역겨움': 'Dg',
 };
 
+const emotionNameToIdMap = {
+  '분노': 1,
+  '불안': 2,
+  '역겨움': 3,
+  '갈망': 4,
+  '두려움': 5,
+  '행복': 6,
+  '평온': 7,
+  '슬픔': 8,
+};
 // AsyncStorage 키 정의
 const LAST_DIAGNOSIS_DATE_KEY = '@lastDiagnosisDate';
 const EMOTION_LOG_PREFIX = '@emotionLog_'; // 달력과 공유할 키 접두사
@@ -247,103 +258,190 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
 
   // 결과 보기 및 저장/네비게이션 핸들러
   const handleViewResult = async () => {
-    // 중복 실행 방지
     if (isSubmittingResult) return;
     setIsSubmittingResult(true); // 로딩 상태 시작
 
-    let primaryEmotion = "감정 정보 없음"; // 최종 주요 감정
-    let primaryEmotionKey = null;        // 최종 주요 감정 키
+    // --- 0. API 전송을 위한 감정 및 정도 결정 ---
+    // 이 변수들은 API로 전송될 최종 첫번째, 두번째 감정/정도를 담습니다.
+    let apiFirstEmotionName = firstEmotion;
+    let apiFirstEmotionDegree = firstDegree;
+    let apiSecondEmotionName = secondEmotion;
+    let apiSecondEmotionDegree = secondDegree;
 
-    // 첫 번째 감정이 있고 정도가 선택된 경우에만 주요 감정 결정 로직 실행
-    if (firstEmotion && firstDegree !== null) {
-      // 시나리오 1: 두 번째 감정이 '없음'이거나 선택되지 않은 경우 -> 첫 번째 감정이 주요 감정
-      if (secondEmotion === '없음' || !secondEmotion) {
-        primaryEmotion = firstEmotion;
+    // 두 감정이 모두 존재하고, 정도도 있는 경우에만 순서 조정 로직 실행
+    if (firstEmotion && firstDegree !== null && secondEmotion && secondEmotion !== '없음' && secondDegree !== null) {
+      if (firstDegree < secondDegree) {
+        // 두 번째 감정의 정도가 더 크면, 두 번째 감정을 API의 첫 번째 감정으로 설정
+        apiFirstEmotionName = secondEmotion;
+        apiFirstEmotionDegree = secondDegree;
+        apiSecondEmotionName = firstEmotion;
+        apiSecondEmotionDegree = firstDegree;
+      } else if (firstDegree === secondDegree) {
+        // 정도가 같을 경우, 우선순위 선택된 감정을 API의 첫 번째 감정으로 설정
+        if (prioritySelectedEmotion && prioritySelectedEmotion === secondEmotion) {
+          // 사용자가 원래의 두 번째 감정을 우선으로 선택했다면 스왑
+          apiFirstEmotionName = secondEmotion;
+          apiFirstEmotionDegree = secondDegree; // 어차피 firstDegree와 같음
+          apiSecondEmotionName = firstEmotion;
+          apiSecondEmotionDegree = firstDegree; // 어차피 secondDegree와 같음
+        }
       }
-      // 시나리오 2: 두 번째 감정과 정도가 모두 선택된 경우
-      else if (secondEmotion && secondDegree !== null) {
-        if (firstDegree > secondDegree) { // 첫 번째 감정 정도가 더 높으면
+    }
+
+    firstEmotion = apiFirstEmotionName;
+    firstDegree = apiFirstEmotionDegree;
+    secondEmotion = apiSecondEmotionName;
+    secondDegree = apiSecondEmotionDegree;
+
+    // --- 1. 서버에 전송할 데이터 준비 ---
+    const firstEmotionId = emotionNameToIdMap[firstEmotion] || null;
+    const firstEmotionAmount = firstDegree; // 사용자가 1~7 사이 숫자를 선택하므로, 이미 숫자
+
+    // API 요청 본문 객체 초기화 (필수 필드만 포함하도록 구성)
+    const recordData = {}; // 빈 객체로 시작
+
+    // 첫 번째 감정 데이터 추가 (필수라고 가정)
+    // firstEmotionId와 firstEmotionAmount가 유효한 숫자인지 확인
+    if (firstEmotionId !== null && typeof firstEmotionId === 'number' &&
+        firstEmotionAmount !== null && typeof firstEmotionAmount === 'number') {
+      recordData.first_emotion_id = firstEmotionId;
+      recordData.first_emotion_amount = firstEmotionAmount;
+    } else {
+      // 이 경우는 firstEmotion이 emotionNameToIdMap에 없거나, firstDegree가 설정되지 않은 치명적 오류.
+      console.error("Validation Error: First emotion data is missing or invalid.", {
+        firstEmotion, firstDegree, firstEmotionId, firstEmotionAmount
+      });
+      Alert.alert("오류", "첫 번째 감정 정보가 올바르지 않아 저장할 수 없습니다.\n앱을 다시 시작해주세요.");
+      setIsSubmittingResult(false);
+      return; // 여기서 중단
+    }
+
+    // 두 번째 감정 데이터 처리
+    // 조건: secondEmotion이 존재하고, '없음'이 아니며, secondDegree도 null이 아닌 경우
+    if (secondEmotion && secondEmotion !== '없음' && secondDegree !== null) {
+      const tempSecondEmotionId = emotionNameToIdMap[secondEmotion] || null;
+      const tempSecondEmotionAmount = secondDegree; // 사용자가 1~7 사이 숫자를 선택
+
+      // 두 번째 감정 ID와 정도가 모두 유효한 숫자인 경우에만 recordData에 추가
+      if (tempSecondEmotionId !== null && typeof tempSecondEmotionId === 'number' &&
+          tempSecondEmotionAmount !== null && typeof tempSecondEmotionAmount === 'number') {
+        recordData.second_emotion_id = tempSecondEmotionId;
+        recordData.second_emotion_amount = tempSecondEmotionAmount;
+      } else {
+        console.warn("Second emotion data was intended but could not be resolved to valid ID/Amount. This should not happen if '없음' was chosen.", {
+          secondEmotion, secondDegree, tempSecondEmotionId, tempSecondEmotionAmount
+        });
+      }
+    }
+
+    // 디버깅용 로그 (API 요청 전 데이터 확인)
+    console.log("--- API Request Data for /daily-records ---");
+    console.log(recordData); // 이 로그를 통해 서버로 어떤 데이터가 전송되는지 확인!
+    console.log("-------------------------------------------");
+    
+    try {
+      const appCurrentDate = await getAppCurrentDate(); // 이 함수가 Promise를 반환한다고 가정
+      if (appCurrentDate && appCurrentDate instanceof Date && !isNaN(appCurrentDate)) {
+        recordData.record_date = appCurrentDate.toISOString(); // ISO 문자열로 변환하여 전송
+      } else {
+        console.warn("Could not get a valid appCurrentDate from getAppCurrentDate(). Server time will be used.");
+      }
+      // --- 2. API 호출하여 서버에 데이터 저장 ---
+      await saveDailyRecord(recordData);
+      console.log('[SimpleDiagnosisScreen] Daily record saved to server successfully.');
+
+      // --- 3. 서버 저장 성공 후, 기존 로컬 저장 및 화면 이동 로직 실행 ---
+
+      // 주요 감정 및 결과 메시지 결정
+      let primaryEmotion = "감정 정보 없음";
+      let primaryEmotionKey = null;
+
+      if (firstEmotion && firstDegree !== null) {
+        if (secondEmotion === '없음' || !secondEmotion || secondDegree === null) {
           primaryEmotion = firstEmotion;
-        } else if (secondDegree > firstDegree) { // 두 번째 감정 정도가 더 높으면
-          primaryEmotion = secondEmotion;
-        } else { // 두 감정의 정도가 같은 경우
-          // 우선순위 질문에서 선택된 감정을 사용
-          if (prioritySelectedEmotion) {
-            primaryEmotion = prioritySelectedEmotion;
-          } else {
-            // 우선순위 질문이 스킵되었거나 사용자가 선택하지 않은 예외 케이스
-            // 기본 정책으로 첫 번째 감정을 사용
+        } else if (secondEmotion && secondDegree !== null) {
+          if (firstDegree > secondDegree) {
             primaryEmotion = firstEmotion;
-            console.warn("Priority emotion was expected but not set. Defaulting to first emotion.");
+          } else if (secondDegree > firstDegree) {
+            primaryEmotion = secondEmotion;
+          } else {
+            if (prioritySelectedEmotion) {
+              primaryEmotion = prioritySelectedEmotion;
+            } else {
+              primaryEmotion = firstEmotion;
+              console.warn("Priority emotion was expected but not set. Defaulting to first emotion.");
+            }
           }
         }
       }
-    }
 
-    // 결과 알림 메시지 생성
-    let resultAlertMessage = `오늘 주로 느낀 감정은 '${primaryEmotion}'입니다.`;
-    // 만약 primaryEmotion이 초기값("감정 정보 없음") 그대로라면
-    if (primaryEmotion === "감정 정보 없음") {
-        // 첫번째 감정이라도 있으면 그걸로 표시
-        if (firstEmotion) {
-            primaryEmotion = firstEmotion;
-            resultAlertMessage = `오늘 주로 느낀 감정은 '${primaryEmotion}'입니다.`;
-        } else {
-            // 첫번째 감정조차 없으면 정보 없음으로 최종 결정
-            resultAlertMessage = "감정 정보를 확인할 수 없습니다.";
-        }
-    }
+      let resultAlertMessage = `오늘 주로 느낀 감정은 '${primaryEmotion}'입니다.`;
+      if (primaryEmotion === "감정 정보 없음") {
+          if (firstEmotion) {
+              primaryEmotion = firstEmotion;
+              resultAlertMessage = `오늘 주로 느낀 감정은 '${primaryEmotion}'입니다.`;
+          } else {
+              resultAlertMessage = "감정 정보를 확인할 수 없습니다.";
+          }
+      }
+      primaryEmotionKey = emotionToKeyMap[primaryEmotion] || null; // 이건 AsyncStorage 저장용 키
 
-    // 결정된 주요 감정에 해당하는 키 찾기
-    primaryEmotionKey = emotionToKeyMap[primaryEmotion] || null;
+      // 디버깅을 위한 결과 로그 출력 (기존 코드)
+      console.log("--- 진단 결과 데이터 (For AsyncStorage & Navigation) ---");
+      console.log("첫번째 감정:", firstEmotion, "| 정도:", firstDegree);
+      console.log("두번째 감정:", secondEmotion, "| 정도:", secondDegree);
+      console.log("우선순위 선택 감정:", prioritySelectedEmotion);
+      console.log("주요 감정:", primaryEmotion, "| 키:", primaryEmotionKey);
+      console.log("----------------------------------------------------");
 
-    // 디버깅을 위한 결과 로그 출력
-    console.log("--- 진단 결과 데이터 ---");
-    console.log("첫번째 감정:", firstEmotion, "| 정도:", firstDegree);
-    console.log("두번째 감정:", secondEmotion, "| 정도:", secondDegree);
-    console.log("우선순위 선택 감정:", prioritySelectedEmotion);
-    console.log("주요 감정:", primaryEmotion, "| 키:", primaryEmotionKey);
-    console.log("------------------------");
-
-    try {
-      // 앱의 현재 날짜 가져오기
+      // AsyncStorage 저장
       const currentAppDate = await getAppCurrentDate();
       const formattedCurrentAppDate = formatDateToYYYYMMDD(currentAppDate);
 
-      // 마지막 진단 날짜 저장 (오늘 날짜)
       await AsyncStorage.setItem(LAST_DIAGNOSIS_DATE_KEY, formattedCurrentAppDate);
       console.log(`[SimpleDiagnosisScreen] Saved last diagnosis date: ${formattedCurrentAppDate}`);
 
-      // 감정 로그 저장 (키가 있을 경우에만)
       if (primaryEmotionKey) {
           const emotionLogKey = `${EMOTION_LOG_PREFIX}${formattedCurrentAppDate}`;
           await AsyncStorage.setItem(emotionLogKey, primaryEmotionKey);
           console.log(`[SimpleDiagnosisScreen] Saved emotion log for ${formattedCurrentAppDate}: ${primaryEmotionKey}`);
       } else {
-          // 키가 없는 경우 (예: "감정 정보 없음") 로그 저장 안 함
           console.log(`[SimpleDiagnosisScreen] No primary emotion key to save for ${formattedCurrentAppDate}.`);
-          // 필요하다면 이전에 저장된 로그를 삭제하는 로직 추가 가능
-          // await AsyncStorage.removeItem(`${EMOTION_LOG_PREFIX}${formattedCurrentAppDate}`);
       }
 
-      // 결과 데이터와 함께 홈 화면 탭으로 이동
-      navigation.navigate('MainTabs', { // 네비게이터 이름 확인 필요
-        screen: 'Home', // 탭 내의 스크린 이름
+      // 화면 이동
+      navigation.navigate('MainTabs', {
+        screen: 'Home',
         params: {
-          diagnosisResult: resultAlertMessage, // 결과 메시지
-          emotionKey: primaryEmotionKey,       // 감정 키
-          diagnosisCompletedToday: true,       // 오늘 진단 완료 플래그
-          diagnosisMessages: messages,         // 대화 기록 전달
+          diagnosisResult: resultAlertMessage,
+          emotionKey: primaryEmotionKey,
+          diagnosisCompletedToday: true,
+          diagnosisMessages: messages,
         },
-        merge: true, // 기존 파라미터와 병합 (선택적)
+        merge: true,
       });
+
     } catch (error) {
-      // 오류 발생 시 사용자에게 알림
+      // --- 4. API 호출 또는 이후 과정에서 오류 발생 시 처리 ---
       console.error("Error saving data or navigating:", error);
-      Alert.alert("오류", "결과 처리 중 문제가 발생했습니다.");
+      let errorMessage = "결과 처리 중 문제가 발생했습니다.";
+      if (error.response) {
+        // 서버가 응답을 반환했지만, 에러 상태 코드일 경우 (4xx, 5xx)
+        console.error("Server Error Response Data:", error.response.data);
+        console.error("Server Error Response Status:", error.response.status);
+        // error.response.data에 서버가 보낸 구체적인 에러 메시지가 있을 수 있습니다.
+        errorMessage = `서버에 저장 중 오류가 발생했습니다. (상태: ${error.response.status})`;
+      } else if (error.request) {
+        // 요청은 이루어졌으나 응답을 받지 못한 경우 (네트워크 문제 등)
+        console.error("No response received from server:", error.request);
+        errorMessage = "서버 응답이 없습니다. 네트워크 연결을 확인해주세요.";
+      } else {
+        // 요청 설정 중 발생한 오류
+        console.error("Error setting up request:", error.message);
+      }
+      Alert.alert("오류", errorMessage);
       setIsSubmittingResult(false); // 오류 발생 시 버튼 다시 활성화
     }
-    // 성공적으로 네비게이션하면 화면이 언마운트되므로 로딩 상태 해제 불필요
   };
 
   // JSX 렌더링
