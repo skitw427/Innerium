@@ -1,223 +1,185 @@
 // 파일 경로: frontend/src/api/apiClient.js
 
 import axios from 'axios';
-// expo-secure-store는 토큰을 안전하게 저장하고 불러올 때 필요합니다.
-// 사용하려면 먼저 설치해야 합니다: npm install expo-secure-store
-import * as SecureStore from 'expo-secure-store'; // 토큰 사용 시 필요
+import * as SecureStore from 'expo-secure-store';
+import { PROVIDER_USER_ID_KEY, ACCESS_TOKEN_KEY } from '../constants/storageKeys'; // 경로 확인!
 
 // --- 1. 기본 설정 ---
-
-// ★★★★★ .env 파일에서 API 기본 URL 가져오기 ★★★★★
-// 프로젝트 루트(frontend 폴더)에 .env 파일을 생성하고
-// EXPO_PUBLIC_API_BASE_URL="실제 API 서버 URL" 형식으로 변수를 정의해야 합니다.
 const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
-// .env 파일에 BASE_URL이 제대로 설정되었는지 확인 (개발 편의성 및 오류 방지)
 if (!BASE_URL) {
-  console.error( // console.warn 대신 error로 변경하여 더 눈에 띄게 함
-    "💥 중요 에러: API 기본 URL(EXPO_PUBLIC_API_BASE_URL)이 .env 파일에 설정되지 않았습니다!" +
-    "\n프로젝트 루트(frontend 폴더)에 .env 파일을 만들고 해당 변수를 정의해주세요." +
-    "\nAPI 호출이 실패합니다."
+  console.error(
+    "💥 중요 에러: API 기본 URL(EXPO_PUBLIC_API_BASE_URL)이 .env 파일에 설정되지 않았습니다!"
+    // ... (이하 생략) -> 이 부분은 제공해주신 코드에 생략 표시가 있었으므로 동일하게 유지합니다.
   );
-  // 앱 실행을 막거나 기본 URL을 제공할 수도 있지만, 에러 로그로 확인하는 것이 좋음
+  // 개발 중에는 로컬 폴백 URL을 제공할 수 있지만, 경고는 유지합니다.
+  // throw new Error("API 기본 URL이 설정되지 않았습니다."); // 또는 에러를 발생시켜 앱 실행 중단
 }
 
-// Axios 인스턴스 생성
 const apiClient = axios.create({
-  baseURL: BASE_URL, // .env에서 가져온 URL 사용
-  timeout: 15000, // 요청 타임아웃 시간 (15초)
+  baseURL: BASE_URL,
+  timeout: 15000, // 기존 15000 유지, 필요시 이미지 업로드 위해 증가 고려
   headers: {
-    'Content-Type': 'application/json', // 기본 요청 형식
+    'Content-Type': 'application/json',
   },
 });
 
-// --- 2. 요청 인터셉터 (헤더에 토큰 자동 추가 등) ---
-// 모든 API 요청이 서버로 전송되기 전에 가로채서 처리합니다.
+// --- 2. 요청 인터셉터 ---
 apiClient.interceptors.request.use(
   async (config) => {
-    // 디버깅: 어떤 요청이 나가는지 로그 출력 (메소드, URL)
-    console.log(`🚀 Requesting: [${config.method?.toUpperCase()}] ${config.baseURL}${config.url}`);
-
-    // --- ★★★ 인증 토큰 자동 추가 로직 (실제 구현 필요) ★★★ ---
     try {
-      // SecureStore 같은 안전한 저장소에서 'accessToken'이라는 키로 저장된 토큰 가져오기 시도
-      const token = await SecureStore.getItemAsync('accessToken');
+      const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+      // 토큰이 필요 없는 경로 (또는 특별한 토큰 처리가 필요한 경로)
+      const noTokenRequiredUrls = ['/auth/guest', '/auth/token', '/auth/login']; // `/auth/token`도 포함 가능
 
-      // 토큰이 존재하고, 해당 요청이 로그인/게스트생성 관련 URL이 아니라면
-      const authUrls = ['/auth/guest', '/auth/login']; // 토큰이 필요 없는 경로 목록
-      if (token && !authUrls.some(url => config.url?.includes(url))) {
-        // 요청 헤더의 Authorization 필드에 'Bearer 토큰값' 형식으로 추가
+      if (token && !noTokenRequiredUrls.some(url => config.url?.includes(url))) {
         config.headers.Authorization = `Bearer ${token}`;
-        console.log('🔑 Authorization header added.');
       }
     } catch (e) {
       console.error('🚨 Failed to get/add access token from SecureStore:', e);
     }
-    // --- ---
-
-    // 수정된 설정(config)을 반환해야 요청이 정상적으로 진행됨
     return config;
   },
   (error) => {
-    // 요청 설정 단계에서 오류 발생 시
     console.error('🚨 Request Interceptor Error:', error);
-    return Promise.reject(error); // 에러를 호출한 곳으로 전달
-  }
-);
-
-// --- 3. 응답 인터셉터 (공통 에러 처리, 토큰 갱신 등) ---
-// 서버로부터 응답을 받은 후, .then() 또는 .catch() 전에 가로채서 처리합니다.
-apiClient.interceptors.response.use(
-  (response) => {
-    // 성공적인 응답(2xx 상태 코드)은 그대로 통과
-    console.log(`✅ Response: [${response.config.method?.toUpperCase()}] ${response.config.url} - Status: ${response.status}`);
-    return response;
-  },
-  async (error) => { // async: 토큰 갱신 등 비동기 작업 처리 가능성
-    // 에러 응답 처리
-    console.error('🚨 Response Interceptor Error:', error.response?.status, error.message);
-    const originalRequest = error.config; // 원래 보냈던 요청 정보 저장
-
-    if (error.response) {
-      // 서버가 에러 상태 코드로 응답한 경우 (4xx, 5xx 등)
-      console.error('Error Response Data:', error.response.data); // 서버가 보낸 상세 에러 내용
-
-      // --- ★★★ 401 Unauthorized 에러 시 토큰 갱신 시도 로직 (필요시 구현) ★★★ ---
-      // 예시: 401 에러이고, 재시도한 요청이 아니며(무한루프 방지), 로그인/게스트생성 요청 실패가 아니라면
-      // if (error.response.status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/')) {
-      //   originalRequest._retry = true; // 재시도 플래그 설정
-      //   console.log('⏳ Unauthorized (401). Attempting token refresh...');
-      //   try {
-      //     // 1. 리프레시 토큰으로 새 액세스 토큰 요청 (별도 API 함수 필요)
-      //     // const refreshTokenValue = await SecureStore.getItemAsync('refreshToken');
-      //     // const refreshResponse = await apiClient.post('/auth/refresh', { refreshToken: refreshTokenValue }); // 예시 API
-      //     // const newAccessToken = refreshResponse.data.accessToken;
-      //
-      //     // 2. 새 액세스 토큰 저장
-      //     // await SecureStore.setItemAsync('accessToken', newAccessToken);
-      //
-      //     // 3. 원래 요청 헤더에 새 토큰 설정 후 재요청
-      //     // apiClient.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`; // Axios 0.x 방식
-      //     // originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`; // Axios 1.x 방식
-      //     // console.log('🔄 Retrying original request with new token...');
-      //     // return apiClient(originalRequest); // ★★★ 수정된 원래 요청 재실행 ★★★
-      //
-      //   } catch (refreshError) {
-      //     console.error('🚨 Token refresh failed:', refreshError);
-      //     // 토큰 갱신 실패 시: 저장된 토큰 삭제 및 로그아웃 처리
-      //     // await SecureStore.deleteItemAsync('accessToken');
-      //     // await SecureStore.deleteItemAsync('refreshToken');
-      //     // 여기서 강제 로그아웃 또는 로그인 화면 이동 로직 실행
-      //     // 예: throw new Error('Session expired. Please login again.'); // 에러를 발생시켜 상위에서 처리하도록 유도
-      //     return Promise.reject(refreshError); // 갱신 실패 에러 반환
-      //   }
-      // }
-      // --- ---
-
-    } else if (error.request) {
-      // 요청은 보냈으나 서버로부터 응답을 받지 못한 경우 (네트워크 오류 등)
-      console.error('🚨 No response received from server:', error.request);
-      // 사용자에게 네트워크 오류 알림 표시 고려
-    } else {
-      // 요청 설정 중에 에러가 발생한 경우
-      console.error('🚨 Error setting up request:', error.message);
-    }
-
-    // 처리되지 않은 에러는 호출한 쪽(.catch 블록)으로 다시 전달
     return Promise.reject(error);
   }
 );
 
+// --- 3. 응답 인터셉터 ---
+apiClient.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  async (error) => {
+    const originalRequest = error.config;
 
-// --- 4. API 호출 함수 정의 (명세서 기반) ---
-// 각 함수는 API 명세서의 한 줄에 해당합니다.
-// JSDoc 주석은 함수의 역할과 반환 타입을 명시하여 코드 가독성을 높입니다. (TypeScript 사용 시 더 강력)
+    if (error.response && error.response.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      console.log('⏳ Unauthorized (401). Attempting token refresh or new guest creation...');
 
-/**
-/**
- * 게스트 사용자 생성 (수정됨)
- * [POST] /auth/guest
- * 요청 본문: { access_token: string, provider_user_id: string }
- * @param {object} guestData - 게스트 사용자 생성을 위한 데이터.
- * @param {string} guestData.access_token - (예: 소셜 로그인 후 받은) 액세스 토큰. API 명세서에 따라 'Bearer ' 접두사 없이 토큰 값 자체를 전달해야 할 수 있습니다.
- * @param {string} guestData.provider_user_id - (예: 소셜 로그인 후 받은) 프로바이더 사용자 ID.
- * @returns {Promise<import("axios").AxiosResponse<{accessToken: string}>>} GuestResDTO (또는 실제 응답 DTO) 포함 응답.
- *          (응답 DTO는 기존 정의를 따르거나, 새 명세서에 따라 변경될 수 있습니다.)
- */
+      try {
+        const storedProviderUserId = await SecureStore.getItemAsync(PROVIDER_USER_ID_KEY);
+        const currentAccessToken = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY); // 토큰 갱신 시 필요할 수 있음
+
+        if (!storedProviderUserId) {
+          console.log('No provider_user_id found. Creating new guest user for retry...');
+          const guestResponse = await createInitialGuestUser(); // 아래 정의된 함수
+          const newAccessToken = guestResponse.data.access_token; // 실제 필드명 확인!
+          const newProviderUserId = guestResponse.data.provider_user_id; // 실제 필드명 확인!
+
+          await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, newAccessToken);
+          await SecureStore.setItemAsync(PROVIDER_USER_ID_KEY, newProviderUserId);
+          console.log('✅ New guest created and tokens stored.');
+
+          originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
+          return apiClient(originalRequest);
+        } else {
+          console.log(`Attempting to refresh token for provider_user_id: ${storedProviderUserId}`);
+          // [수정] issueUserToken 호출 시 currentAccessToken을 guestToken으로 전달
+          const refreshResponse = await issueUserToken(storedProviderUserId, currentAccessToken);
+          const newAccessToken = refreshResponse.data.access_token; // 실제 필드명 확인!
+
+          await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, newAccessToken);
+          console.log('✅ Token refreshed and stored.');
+
+          originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
+          return apiClient(originalRequest);
+        }
+      } catch (refreshOrNewGuestError) {
+        console.error('🚨 Token refresh or new guest creation failed after 401:', refreshOrNewGuestError);
+        const isInvalidProviderIdError = refreshOrNewGuestError.response &&
+          [400, 403, 404].includes(refreshOrNewGuestError.response.status);
+
+        if (isInvalidProviderIdError && originalRequest.url !== '/auth/guest') {
+          console.log('Provider_user_id seems invalid. Attempting to create a new guest account.');
+          try {
+            await SecureStore.deleteItemAsync(PROVIDER_USER_ID_KEY);
+            await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
+            const guestResponse = await createInitialGuestUser();
+            const newAccessToken = guestResponse.data.access_token; // 실제 필드명 확인!
+            const newProviderUserId = guestResponse.data.provider_user_id; // 실제 필드명 확인!
+            await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, newAccessToken);
+            await SecureStore.setItemAsync(PROVIDER_USER_ID_KEY, newProviderUserId);
+            console.log('✅ New guest created after failed token refresh.');
+            originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
+            return apiClient(originalRequest);
+          } catch (finalGuestError) {
+            console.error('🚨 Critical: Failed to create new guest after token refresh failure:', finalGuestError);
+            return Promise.reject(finalGuestError);
+          }
+        }
+        return Promise.reject(refreshOrNewGuestError);
+      }
+    }
+
+    // 기존 에러 로깅 (401 아니거나 재시도 실패 시)
+    if (error.response) {
+      console.error('🚨 Response Interceptor Error (non-401 or retry failed):', error.response.status, error.message);
+      console.error('Error Response Data:', error.response.data);
+    } else if (error.request) {
+      console.error('🚨 No response received from server:', error.request);
+    } else {
+      console.error('🚨 Error setting up request:', error.message);
+    }
+    return Promise.reject(error);
+  }
+);
+
+// --- 4. API 호출 함수 정의 ---
+
+// [추가] 최초 게스트 사용자 생성을 위한 함수
+export const createInitialGuestUser = () => {
+  return apiClient.post('/auth/guest', {}); // 요청 본문이 없다면 {} 또는 생략
+};
+
+// 기존 함수들 (createGuestUser, socialLogin, issueUserToken은 하나만 남김)
 export const createGuestUser = (guestData) => {
-  // guestData는 { access_token: "...", provider_user_id: "..." } 형태의 객체여야 합니다.
   return apiClient.post('/auth/guest', guestData);
 };
 
-/**
- * 소셜 로그인
- * [POST] /auth/login
- * 요청 헤더: Authorization: Bearer <guest_token> (게스트 인증 토큰 필요)
- * 요청 본문: { provider: string, id_token: string }
- * 성공 응답 본문: { provider_user_id: string, access_token: string, is_new_user: boolean }
- * @param {object} loginData - 로그인 요청 데이터.
- * @param {string} loginData.provider - 소셜 로그인 제공자 (예: 'google').
- * @param {string} loginData.id_token - 소셜 로그인 제공자로부터 받은 ID 토큰.
- * @param {string} guestToken - /auth/guest 등을 통해 얻은 게스트 세션의 액세스 토큰.
- * @returns {Promise<import("axios").AxiosResponse<{provider_user_id: string, access_token: string, is_new_user: boolean}>>} 로그인 성공 시 provider_user_id, 새로운 액세스 토큰(사용자용), 신규 사용자 여부 포함 응답
- */
 export const socialLogin = (loginData, guestToken) => {
-  // loginData는 { provider: "google", id_token: "..." } 형태의 객체여야 합니다.
-  // guestToken은 문자열 형태의 게스트 액세스 토큰입니다.
-
-  // 이 요청은 특별히 guestToken을 헤더에 직접 설정해야 합니다.
-  // apiClient.post의 세 번째 인자로 config 객체를 전달하여 헤더를 추가/수정합니다.
   return apiClient.post('/auth/login', loginData, {
     headers: {
-      // 기존 헤더에 추가되거나, Authorization 헤더가 있다면 이 값으로 덮어씁니다.
       'Authorization': `Bearer ${guestToken}`
     }
   });
 };
 
+// [수정] issueUserToken 함수는 하나만 남기고, 시그니처는 (providerUserId, guestToken)으로 통일
 /**
- * 사용자 인증 토큰 발급 (게스트 토큰 필요로 가정)
- * [POST] /auth/token  (★★★ 중요: 실제 API 경로 및 메소드 확인 필요 ★★★)
- * 요청 헤더: Authorization: Bearer <guest_token> (가정)
+ * 사용자 인증 토큰 발급
+ * [POST] /auth/token
+ * 요청 헤더: Authorization: Bearer <guest_token> (API 명세에 따라 필요 여부 결정)
  * 요청 본문: { provider_user_id: string }
- * 성공 응답 본문: { provider_user_id: string, access_token: string } (access_token은 사용자 인증 토큰)
- *
- * 참고:
- * - 이 API를 호출하기 전에, `/auth/guest` 등을 통해 `provider_user_id`와 `guest_token`을 확보해야 합니다.
- * - `provider_user_id`가 없는 경우, 먼저 게스트 사용자 생성 API를 호출하여 `provider_user_id`를 발급받아야 합니다.
- *
- * @param {string} providerUserId - 사용자 식별자 (예: 게스트 세션에서 얻은 ID).
- * @param {string} guestToken - 현재 유효한 게스트 액세스 토큰. (이 API가 게스트 토큰을 요구한다고 가정)
- * @returns {Promise<import("axios").AxiosResponse<{provider_user_id: string, access_token: string}>>} provider_user_id와 새로운 사용자 액세스 토큰(Bearer)을 포함한 응답.
+ * @param {string} providerUserId - 사용자 식별자.
+ * @param {string} guestToken - (선택적 또는 API 명세에 따라 필수) 게스트 액세스 토큰.
  */
 export const issueUserToken = (providerUserId, guestToken) => {
-  // 필수 파라미터 체크 (개발 편의성)
   if (!providerUserId) {
     const errorMessage = 'issueUserToken: providerUserId는 필수입니다.';
     console.error(`🚨 ${errorMessage}`);
-    return Promise.reject(new Error(errorMessage)); // 에러를 반환하여 호출부에서 처리하도록 함
-  }
-  if (!guestToken) {
-    // 이 API가 게스트 토큰을 요구한다는 가정 하에 경고/에러 처리
-    const errorMessage = 'issueUserToken: guestToken은 필수입니다. (API가 게스트 토큰을 요구한다고 가정)';
-    console.warn(`⚠️ ${errorMessage}`);
-    // 실제 운영에서는 에러를 던지거나, API 명세에 따라 다르게 처리할 수 있습니다.
-    // return Promise.reject(new Error(errorMessage));
+    return Promise.reject(new Error(errorMessage));
   }
 
-  // ★★★ 실제 API 경로로 변경해야 합니다. 예: '/auth/issue-token' 또는 '/users/token' 등 ★★★
-  const apiPath = '/auth/token';
+  // API가 guestToken을 요구하는지에 따라 이 부분 로직 조정
+  const headersConfig = {};
+  if (guestToken) { // guestToken이 제공된 경우에만 헤더에 추가 (API 명세 확인!)
+    headersConfig.Authorization = `Bearer ${guestToken}`;
+  } else {
+    // API가 guestToken 없이도 토큰 갱신을 허용하거나,
+    // 또는 이 API가 요청 인터셉터의 자동 토큰 주입을 사용해야 한다면
+    // guestToken이 없을 때의 처리를 명확히 해야 함.
+    // 현재는 guestToken이 없으면 Authorization 헤더 없이 요청.
+    console.warn('⚠️ issueUserToken: guestToken is not provided. Requesting without Authorization header for /auth/token.');
+  }
+
+  const apiPath = '/auth/token'; // ★★★ 실제 API 경로 확인 필요 ★★★
 
   return apiClient.post(
     apiPath,
     { provider_user_id: providerUserId }, // 요청 본문
-    {
-      headers: {
-        // 이 API가 게스트 토큰을 요구한다고 가정하고 헤더 설정
-        // 만약 게스트 토큰이 필요 없다면 이 headers 객체 전체를 제거하거나 수정해야 합니다.
-        'Authorization': `Bearer ${guestToken}`
-      }
-    }
+    { headers: headersConfig } // 설정된 헤더 사용
   );
 };
 
@@ -244,7 +206,7 @@ export const getMyInfo = () => {
  * @returns {Promise<import("axios").AxiosResponse<any>>} 성공 시 보통 200 OK 또는 204 No Content 응답
  */
 export const deleteAccount = () => {
-    // Authorization 헤더는 요청 인터셉터가 자동으로 추가합니다.
+    // Authorization 헤더는 인터셉터가 자동으로 추가합니다.
     // DELETE 요청이며 요청 본문이 필요 없습니다.
     return apiClient.delete('/users/me');
 };
@@ -264,48 +226,29 @@ export const updateUserSettings = (settingsData) => {
     return apiClient.patch('/users/settings', settingsData);
 };
 
+// --- 정원 관련 API 함수 (추가/수정된 부분) ---
+
 /**
  * 현재 진행 중인 정원 정보 불러오기
  * [GET] /gardens/current
- * 요청 헤더: Authorization: Bearer <user_token> (요청 인터셉터에서 자동 추가되어야 함)
+ * 요청 헤더: Authorization: Bearer <user_token> (요청 인터셉터에서 자동 추가)
  * 요청 본문: 없음
- * 성공 응답 본문(CurrentGardenResDTO): {
- *   garden_id: string,
- *   tree_level: number, // API 명세상 int는 JS에서 number
- *   sky_color: string,
- *   is_complete: boolean, // API 명세상 bool는 JS에서 boolean
- *   flowers: Array<{ // 꽃 객체 배열
- *     flower_instance_id: string,
- *     flower_type: {
- *       id: number, // API 명세상 int는 JS에서 number
- *       image_url: string
- *     },
- *     position: {
- *       x: number, // API 명세상 float는 JS에서 number
- *       y: number  // API 명세상 float는 JS에서 number
- *     },
- *     emotion_type_id: number // API 명세상 int는 JS에서 number
+ * 성공 응답 본문(CurrentGardenResDTO - 가정된 확장 형식): {
+ *   garden_id: string | null, // 서버에서 관리하는 현재 정원의 ID (없을 수 있음)
+ *   tree_level: number, // 현재 나무 레벨 (또는 꽃 개수로 서버에서 계산 가능)
+ *   snapshot_taken: boolean, // 현재 정원 스냅샷 촬영 여부
+ *   flowers: Array<{
+ *     id: string, // 클라이언트/서버 간 동기화되는 꽃의 고유 ID
+ *     emotion_key: string, // 예: "H", "Ax" (클라이언트 IMAGES 상수와 매핑 위함)
+ *     image_key: string, // 예: "flower1", "flower2" (클라이언트 IMAGES 상수와 매핑 위함)
+ *     emotion_name: string,
+ *     messages: Array<{ sender: 'user' | 'bot', text: string, id?: string }>, // 대화 기록
+ *     creation_date: string, // "YYYY-MM-DD"
+ *     relative_pos: { topRatio: number, leftRatio: number } | null // 상대적 위치
  *   }>
  * }
- * @returns {Promise<import("axios").AxiosResponse<{
-*   garden_id: string,
-*   tree_level: number,
-*   sky_color: string,
-*   is_complete: boolean,
-*   flowers: Array<{
-*     flower_instance_id: string,
-*     flower_type: {
-*       id: number,
-*       image_url: string
-*     },
-*     position: {
-*       x: number,
-*       y: number
-*     },
-*     emotion_type_id: number
-*   }>
-* }>>} CurrentGardenResDTO 포함 응답
-*/
+ * @returns {Promise<import("axios").AxiosResponse<CurrentGardenResDTO>>} CurrentGardenResDTO 포함 응답
+ */
 export const getCurrentGarden = () => {
  // Authorization 헤더는 인터셉터가 자동으로 추가합니다.
  // GET 요청이므로 요청 본문(두 번째 인자)은 필요 없습니다.
@@ -313,30 +256,59 @@ export const getCurrentGarden = () => {
 };
 
 /**
- * 정원 완성 처리 (이름 결정 등)
+ * 현재 진행 중인 정원 정보 저장/업데이트
+ * [PUT] /gardens/current (또는 API 설계에 따라 POST일 수 있음)
+ * 요청 헤더: Authorization: Bearer <user_token> (요청 인터셉터에서 자동 추가)
+ * 요청 본문(SaveCurrentGardenReqDTO - 가정된 형식): {
+ *   garden_id?: string | null, // 업데이트할 기존 정원 ID (새 정원일 경우 null 또는 생략)
+ *   tree_level: number,
+ *   snapshot_taken: boolean,
+ *   flowers: Array<{
+ *     id: string,
+ *     emotion_key: string,
+ *     image_key: string,
+ *     emotion_name: string,
+ *     messages: Array<{ sender: 'user' | 'bot', text: string, id?: string }>,
+ *     creation_date: string,
+ *     relative_pos: { topRatio: number, leftRatio: number } | null
+ *   }>
+ * }
+ * 성공 응답: 200 OK (업데이트된 정원 정보 또는 garden_id 포함 가능)
+ * @param {SaveCurrentGardenReqDTO} gardenData - 저장할 정원 데이터
+ * @returns {Promise<import("axios").AxiosResponse<any>>} 성공 시 응답 (업데이트된 garden_id 등 포함 가능)
+ */
+export const saveCurrentGarden = (gardenData) => {
+  // Authorization 헤더는 인터셉터가 자동으로 추가합니다.
+  // API 엔드포인트 및 메소드(PUT/POST)는 실제 백엔드 설계에 맞춰야 합니다.
+  // 여기서는 PUT /gardens/current 로 가정합니다.
+  return apiClient.put('/gardens/current', gardenData);
+};
+
+/**
+ * 정원 완성 처리 (이름 결정 및 스냅샷 저장)
  * [POST] /gardens/{garden_id}/complete
- * 요청 헤더: Authorization: Bearer <user_token> (요청 인터셉터에서 자동 추가되어야 함)
- * 요청 본문(CompleteGardenReqDTO): { name: string }
+ * 요청 헤더: Authorization: Bearer <user_token> (요청 인터셉터에서 자동 추가)
+ * 요청 본문(CompleteGardenReqDTO - 가정된 확장 형식): {
+ *   name: string, // 사용자가 정한 정원 이름
+ *   snapshot_base64_data?: string // Base64 인코딩된 스냅샷 이미지 데이터 (선택적, API 명세에 따라)
+ * }
  * 성공 응답 본문(CompleteGardenResDTO): {
  *   garden_id: string,
  *   name: string,
  *   completed_at: string, // ISO 8601 형식의 날짜/시간 문자열
- *   snapshot_image_url: string
+ *   snapshot_image_url: string // 서버에 저장된 스냅샷 이미지 URL
  * }
- * @param {string | number} gardenId - 완성 처리할 정원의 ID (경로 파라미터)
- * @param {object} gardenNameData - 정원 이름 데이터. 예: { name: "나의 행복 정원" }
- * @returns {Promise<import("axios").AxiosResponse<{
-*   garden_id: string,
-*   name: string,
-*   completed_at: string,
-*   snapshot_image_url: string
-* }>>} CompleteGardenResDTO 포함 응답
-*/
-export const completeGarden = (gardenId, gardenNameData) => {
+ * @param {string} gardenId - 완성 처리할 정원의 ID (경로 파라미터)
+ * @param {object} gardenCompleteData - 정원 완성 데이터 (이름, 스냅샷 등)
+ * @returns {Promise<import("axios").AxiosResponse<CompleteGardenResDTO>>} CompleteGardenResDTO 포함 응답
+ */
+export const completeGarden = (gardenId, gardenCompleteData) => {
  // Authorization 헤더는 인터셉터가 자동으로 추가합니다.
  // URL 경로에 gardenId를 포함시키고, 두 번째 인자로 요청 본문 데이터를 전달합니다.
- return apiClient.post(`/gardens/${gardenId}/complete`, gardenNameData);
+ return apiClient.post(`/gardens/${gardenId}/complete`, gardenCompleteData);
 };
+
+// --- 기존 정원 API 함수들 (주석은 원래 제공된 상세한 내용 유지) ---
 
 /**
  * 정원 이름 변경
@@ -377,21 +349,7 @@ export const changeGardenName = (gardenId, newNameData) => {
  * }
  * @param {number} page - 조회할 페이지 번호 (API 명세에 따라 0부터 시작할 수도 있음, 확인 필요)
  * @param {number} size - 한 페이지에 가져올 정원 개수
- * @returns {Promise<import("axios").AxiosResponse<{
-*   contents: Array<{
-*     garden_id: string,
-*     name: string,
-*     completed_at: string,
-*     snapshot_image_url: string
-*   }>,
-*   pages: {
-*     pageNumber: number,
-*     pageSize: number,
-*     totalElements: number,
-*     totalPages: number,
-*     isLast: boolean
-*   }
-* }>>} GardenStorageResDTO 포함 응답
+ * @returns {Promise<import("axios").AxiosResponse<GardenStorageResDTO>>} GardenStorageResDTO 포함 응답
 */
 export const getCompletedGardens = (page, size) => {
  // Authorization 헤더는 인터셉터가 자동으로 추가합니다.
@@ -411,18 +369,15 @@ export const getCompletedGardens = (page, size) => {
  *   snapshot_image_url: string
  * }
  * @param {string | number} gardenId - 조회할 정원의 ID (경로 파라미터)
- * @returns {Promise<import("axios").AxiosResponse<{
-*   garden_id: string,
-*   name: string,
-*   completed_at: string,
-*   snapshot_image_url: string
-* }>>} PreviousGardenResDTO 포함 응답
+ * @returns {Promise<import("axios").AxiosResponse<PreviousGardenResDTO>>} PreviousGardenResDTO 포함 응답
 */
 export const getGardenDetails = (gardenId) => {
  // Authorization 헤더는 인터셉터가 자동으로 추가합니다.
  // URL 경로에 gardenId를 포함시킵니다. GET 요청이므로 본문은 없습니다.
  return apiClient.get(`/gardens/${gardenId}`);
 };
+
+// --- 나머지 기존 API 함수들 (주석은 원래 제공된 상세한 내용 유지) ---
 
 /**
  * 심층 진단 AI 대화 요청
@@ -439,11 +394,7 @@ export const getGardenDetails = (gardenId) => {
  * @param {object} messageData - 대화 관련 데이터.
  *   - 시작 시: { action: 'start' }
  *   - 진행 중: { conversation_id: 'some_id', user_message: '사용자 메시지' }
- * @returns {Promise<import("axios").AxiosResponse<{
-*   conversation_id: string,
-*   ai_message: string,
-*   is_complete: boolean
-* }>>} ConversationResDTO 포함 응답
+ * @returns {Promise<import("axios").AxiosResponse<ConversationResDTO>>} ConversationResDTO 포함 응답
 */
 export const converseWithAI = (messageData) => {
  // Authorization 헤더는 인터셉터가 자동으로 추가합니다.
@@ -492,17 +443,7 @@ export const saveDailyRecord = (recordData) => {
  * }
  * @param {number | string} year - 조회할 년도 (YYYY 형식)
  * @param {number | string} month - 조회할 월 (1 ~ 12)
- * @returns {Promise<import("axios").AxiosResponse<{
-*   monthly_records: Array<{
-*     record_id: string,
-*     record_date: string,
-*     emotion_type: {
-*       emotion_type_id: number,
-*       name: string,
-*       emoji_url: string
-*     }
-*   }>
-* }>>} CalenderResDTO 포함 응답
+ * @returns {Promise<import("axios").AxiosResponse<CalenderResDTO>>} CalenderResDTO 포함 응답
 */
 export const getMonthlyRecords = (year, month) => {
  // Authorization 헤더는 인터셉터가 자동으로 추가합니다.
@@ -538,25 +479,7 @@ export const getMonthlyRecords = (year, month) => {
  *   result_summary: string // 결과 요약 텍스트
  * }
  * @param {string} date - 조회할 날짜 ("YYYY-MM-DD" 형식의 문자열)
- * @returns {Promise<import("axios").AxiosResponse<{
-*   record_id: string,
-*   record_date: string,
-*   emotion_type: {
-*     emotion_type_id: number,
-*     name: string,
-*     emoji_url: string
-*   },
-*   chosen_flower: {
-*     flower_type_id: number,
-*     name: string,
-*     image_url: string
-*   },
-*   questions_answers: Array<{
-*     question: string,
-*     answer: string
-*   }>,
-*   result_summary: string
-* }>>} ResultResDTO 포함 응답
+ * @returns {Promise<import("axios").AxiosResponse<ResultResDTO>>} ResultResDTO 포함 응답
 */
 export const getDailyRecordResult = (date) => {
  // Authorization 헤더는 인터셉터가 자동으로 추가합니다.

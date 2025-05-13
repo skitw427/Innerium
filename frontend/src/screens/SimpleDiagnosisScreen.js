@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
   outerContainer: { flex: 1 }, // SafeArea 내부 전체 컨테이너
   topSpacing: { height: 40 }, // 상단 여백
   chatListContainer: { flex: 1 }, // 채팅 목록 영역이 남은 공간 차지
-  chatContainer: { paddingBottom: 10, paddingHorizontal: 10, flexGrow: 1, justifyContent: 'flex-end' }, // FlatList 내부 패딩 및 컨텐츠 아래 정렬
+  chatContainer: { paddingBottom: 10, paddingHorizontal: 10, flexGrow: 1, }, // FlatList 내부 패딩 및 컨텐츠 아래 정렬
   messageOuterContainer: { flexDirection: 'row', marginVertical: 6, }, // 각 메시지 행
   botRowContainer: { justifyContent: 'flex-start', alignSelf: 'flex-start', }, // 봇 메시지 왼쪽 정렬
   userRowContainer: { justifyContent: 'flex-end', alignSelf: 'flex-end', }, // 사용자 메시지 오른쪽 정렬
