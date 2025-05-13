@@ -31,4 +31,4 @@ const uploadSnapshot = multer({
   fileFilter: fileFilter
 });
 
-module.exports = { uploadSnapshot };
+module.exports = uploadSnapshot;

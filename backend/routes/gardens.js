@@ -4,6 +4,7 @@ const db = require('../models'); // Sequelize 모델
 const authMiddleware = require('../middlewares/authMiddleware'); // 인증 미들웨어
 const uploadSnapshot = require('../middlewares/uploadMiddleware');
 const { Op } = require('sequelize'); // Sequelize 연산자
+const path = require('path');
 
 const SNAPSHOT_STORAGE_BASE_PATH = path.join(__dirname, '..', 'storage', 'snapshots');
 
