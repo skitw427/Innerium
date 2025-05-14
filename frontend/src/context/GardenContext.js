@@ -16,6 +16,37 @@ export const GardenProvider = ({ children }) => {
   const [isLoadingGarden, setIsLoadingGarden] = useState(false); // 초기 로딩은 false, fetch 시작 시 true
   const [gardenError, setGardenError] = useState(null);
 
+  useEffect(() => {
+    const loadInitialDataFromStorage = async () => {
+      if (isLoggedIn) { // 로그인 상태일 때만 시도
+        setIsLoadingGarden(true); // 초기 로딩 시작 (선택적)
+        try {
+          const detailsString = await AsyncStorage.getItem(ASYNC_STORAGE_GARDEN_DETAILS_KEY);
+          const flowersString = await AsyncStorage.getItem(ASYNC_STORAGE_PLACED_FLOWERS_KEY);
+
+          if (detailsString) {
+            setCurrentGardenDetails(JSON.parse(detailsString));
+          }
+          if (flowersString) {
+            const parsedFlowers = JSON.parse(flowersString);
+            // HomeScreen에서처럼 source 필드 재구성 로직이 필요할 수 있음
+            setPlacedFlowers(parsedFlowers.map(flower => {
+                if (flower.emotionKey && flower.imageKey && IMAGES.flowers[flower.emotionKey] && IMAGES.flowers[flower.emotionKey][flower.imageKey]) {
+                    return { ...flower, source: IMAGES.flowers[flower.emotionKey][flower.imageKey] };
+                }
+                return flower;
+            }));
+          }
+          console.log('[GardenContext] Initial data loaded from AsyncStorage.');
+        } catch (error) {
+          console.error('[GardenContext] Failed to load initial data from AsyncStorage:', error);
+          // 에러 발생 시 상태를 초기화하거나, 기존 상태 유지
+        } 
+      }
+    };
+    // loadInitialDataFromStorage();
+  }, [isLoggedIn]);
+  
   // --- API 호출 및 데이터 처리 함수 ---
   const fetchCurrentGarden = useCallback(async () => {
     if (isLoggedIn) { // 사용자가 로그인 되어 있을 때만 실행

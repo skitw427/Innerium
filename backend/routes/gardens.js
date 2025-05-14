@@ -83,6 +83,7 @@ router.get('/current', authMiddleware, async (req, res, next) => {
       flowers: flowersInGarden.map(record => {
         const flowerTypeData = record.chosenFlowerType ? {
           id: record.chosenFlowerType.flower_type_id,
+          name: record. chosenFlowerType.name,
           image_url: record.chosenFlowerType.image_url,
         } : null; // 또는 기본값 설정
 

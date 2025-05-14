@@ -163,7 +163,7 @@ const analysisModel = genAI.getGenerativeModel({
   const analysisGenerationConfig = { temperature: 0.3, maxOutputTokens: 1024 }; // 분석은 좀 더 결정적인 결과 유도
 
 const generationConfig = {
-  temperature: 0.7, // 창의성 조절 (0.0 ~ 1.0)
+  temperature: 0.2, // 창의성 조절 (0.0 ~ 1.0)
   topK: 1,
   topP: 1,
   maxOutputTokens: 2048, // 최대 출력 토큰 수

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BackHandler, Alert, Platform, ScrollView, FlatList } from 'react-native'; // FlatList import 추가
 import { useFocusEffect } from '@react-navigation/native';
+import { getDailyRecordResult, getCurrentGarden } from '../api/apiClient';
 import { StatusBar } from 'expo-status-bar';
 import {
   StyleSheet, View, TouchableOpacity, Image, Text,
@@ -44,6 +45,11 @@ const keyToEmotionNameMap = {
   Ag: '분노', F: '두려움', Dr: '갈망', Dg: '역겨움',
 };
 
+const emotionToKeyMap = {
+  '행복': 'H', '불안': 'Ax', '평온': 'R', '슬픔': 'S',
+  '분노': 'Ag', '두려움': 'F', '갈망': 'Dr', '역겨움': 'Dg',
+};
+
 const HomeScreen = ({ navigation, route }) => {
   // --- State 및 Hooks ---
   const { isTransitioning, handleNavigate } = useScreenTransition();
@@ -77,6 +83,7 @@ const HomeScreen = ({ navigation, route }) => {
   const flowerCanvasWidth = windowWidth - (flowerCanvasPaddingHorizontal * 2);
   const calculatedFlowerHeight = windowHeight * FLOWER_HEIGHT_RATIO_OF_WINDOW;
   const currentFlowerPixelHeight = Math.max(MIN_FLOWER_HEIGHT, Math.min(calculatedFlowerHeight, MAX_FLOWER_HEIGHT));
+
 
   // --- Effects ---
 
@@ -305,7 +312,7 @@ const HomeScreen = ({ navigation, route }) => {
   // 진단 결과 처리
   useEffect(() => {
     if (route.params?.diagnosisResult && route.params?.emotionKey && !isLoadingFlowers && Array.isArray(placedFlowers)) {
-      const { diagnosisResult, emotionKey, primaryEmotionName, diagnosisMessages } = route.params;
+      const { diagnosisResult, emotionKey, primaryEmotionName, diagnosisMessages, diagnosisDate } = route.params;
       
       // 네비게이션 파라미터 초기화 (중복 처리 방지)
       if (navigation && typeof navigation.setParams === 'function') {
@@ -314,11 +321,50 @@ const HomeScreen = ({ navigation, route }) => {
               emotionKey: undefined,
               primaryEmotionName: undefined,
               diagnosisMessages: undefined,
-              DiagnosisDate: undefined
+              diagnosisDate: undefined
           });
       }
 
-      const processDiagnosisResult = async (result, key, name, messages) => {
+  //     const showResultAndRefreshGarden = async (result, key, name, messages, diagDate) => {
+  //       try {
+  //         const recordResponse = await getDailyRecordResult(diagDate);
+  //         const recordData = recordResponse.data;
+
+  //         const chosenFlowerEmotionKey = recordData.emotion_type.name ? emotionToKeyMap[recordData.emotion_type.name] : key;
+  //         const chosenFlowerImageKey = recordData.chosen_flower.name ? recordData.chosen_flower.name : null;
+          
+  //         let flowerImageForModal = null;
+  //         if (IMAGES.flowers[chosenFlowerEmotionKey] && IMAGES.flowers[chosenFlowerEmotionKey][chosenFlowerImageKey]) {
+  //           flowerImageForModal = IMAGES.flowers[chosenFlowerEmotionKey][chosenFlowerImageKey];
+  //         } else {
+  //           console.warn(`모달용 꽃 이미지 못찾음: emotionKey=${chosenFlowerEmotionKey}, imageKey=${chosenFlowerImageKey}`);
+  //           // flowerImageForModal = IMAGES.flowers.UNKNOWN.default_flower; // Fallback
+  //         }
+          
+  //         let emotionIconForModal = IMAGES.emotionIcon[chosenFlowerEmotionKey] || null;
+
+  //         // 2. 결과 모달 띄우기
+  //         setResultModalMessage(diagnosisResult); // 이전 화면에서 전달된 메시지
+  //         setResultModalEmotionIcon(emotionIconForModal);
+  //         setResultModalImage(flowerImageForModal); // 백엔드가 알려준 꽃으로 모달 이미지 설정
+  //         setIsResultModalVisible(true);
+  //         setDiagnosisCompletedForToday(true); // 오늘 진단 완료 상태로 변경
+
+  //         await loadGardenData(true); // 정원 데이터 새로고침 (새 꽃, 나무 레벨 업데이트)
+
+  //       } catch (error) {
+  //         console.error("진단 결과 처리 또는 정원 갱신 중 오류:", error.response?.data || error.message);
+  //         Alert.alert("오류", "진단 결과를 처리하거나 정원을 업데이트하는 중 문제가 발생했습니다.");
+  //         // 오류 발생 시에도 정원은 한번 갱신 시도
+  //         await loadGardenData(true);
+  //       }
+  //     };
+
+  //     showResultAndRefreshGarden();
+  //   }
+  // }, [route.params, navigation, isLoadingGarden, loadGardenData]);
+
+      const processDiagnosisResult = async (result, key, name, messages, diagDate) => {
         let flowerImageForModal = null;
         let emotionIconForModal = null;
         let shouldPlantNewFlower = false;
