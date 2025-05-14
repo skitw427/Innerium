@@ -405,6 +405,7 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
           emotionKey: primaryEmotionKey,
           diagnosisCompletedToday: true,
           diagnosisMessages: messages,
+          diagnosisDate: currentAppDate
         },
         merge: true,
       });

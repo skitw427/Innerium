@@ -313,7 +313,8 @@ const HomeScreen = ({ navigation, route }) => {
               diagnosisResult: undefined,
               emotionKey: undefined,
               primaryEmotionName: undefined,
-              diagnosisMessages: undefined
+              diagnosisMessages: undefined,
+              DiagnosisDate: undefined
           });
       }
 
