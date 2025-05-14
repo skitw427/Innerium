@@ -1,14 +1,14 @@
 // src/screens/HomeScreen.js
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { BackHandler, Alert, Platform, ScrollView, FlatList } from 'react-native'; // FlatList import 추가
+import { BackHandler, Alert, Platform, ScrollView, FlatList, ActivityIndicator as ListActivityIndicator } from 'react-native'; // ActivityIndicator 이름 충돌 방지
 import { useFocusEffect } from '@react-navigation/native';
 import { getDailyRecordResult, getCurrentGarden } from '../api/apiClient';
 import { StatusBar } from 'expo-status-bar';
 import {
   StyleSheet, View, TouchableOpacity, Image, Text,
-  ImageBackground, SafeAreaView, useWindowDimensions, Modal, ActivityIndicator,
+  ImageBackground, SafeAreaView, useWindowDimensions, Modal, ActivityIndicator, // 여기 ActivityIndicator는 전체 로딩용
 } from 'react-native';
-// import { LinearGradient } from 'expo-linear-gradient'; // LinearGradient 더 이상 사용하지 않음 (해당 버튼들에서)
+// import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ViewShot from 'react-native-view-shot';
 import NavigationBar from '../components/NavigationBar';
@@ -62,7 +62,7 @@ const HomeScreen = ({ navigation, route }) => {
   const [resultModalImage, setResultModalImage] = useState(null);
   const [resultModalEmotionIcon, setResultModalEmotionIcon] = useState(null);
   const [placedFlowers, setPlacedFlowers] = useState(null);
-  const [isLoadingFlowers, setIsLoadingFlowers] = useState(true);
+  const [isLoadingFlowers, setIsLoadingFlowers] = useState(true); // 전체 정원 로딩
   const [currentTreeImageSource, setCurrentTreeImageSource] = useState(IMAGES.treeImage);
   const [currentTreeImageScalingFactor, setCurrentTreeImageScalingFactor] = useState(TREE_IMAGE_SCALE_BASE);
   const [showEmotionCheckButton, setShowEmotionCheckButton] = useState(true);
@@ -72,6 +72,9 @@ const HomeScreen = ({ navigation, route }) => {
   const [isFlowerInfoModalVisible, setIsFlowerInfoModalVisible] = useState(false);
   const [selectedFlowerData, setSelectedFlowerData] = useState(null);
   const [showChatHistoryInModal, setShowChatHistoryInModal] = useState(false);
+  const chatHistoryFlatListRef = useRef(null); 
+  const [isLoadingChatHistory, setIsLoadingChatHistory] = useState(false); // 대화 기록 로딩 상태 추가
+
 
   // --- 계산된 값들 ---
   const topSpacerHeight = windowHeight * TOP_SPACER_RATIO;
@@ -97,13 +100,13 @@ const HomeScreen = ({ navigation, route }) => {
         [
           {
             text: "확인",
-            onPress: () => clearNewAccountFlag() // 확인 시 플래그 초기화
+            onPress: () => clearNewAccountFlag() 
           }
         ],
         { cancelable: false }
       );
     }
-  }, [isNewAccountJustCreated, clearNewAccountFlag]); // isNewAccountJustCreated 상태 변경 시 실행
+  }, [isNewAccountJustCreated, clearNewAccountFlag]); 
 
   // 초기 상태 로드
   useEffect(() => {
@@ -139,7 +142,6 @@ const HomeScreen = ({ navigation, route }) => {
             await AsyncStorage.removeItem(PLACED_FLOWERS_KEY);
           }
         } else {
-          // 저장된 꽃이 없는데 스냅샷이 찍혔다고 되어있으면 플래그 초기화
           if (isSnapshotTaken) {
               console.log('[HomeScreen] No flowers found, but snapshot flag was true. Resetting flag.');
               await AsyncStorage.setItem(CURRENT_GARDEN_SNAPSHOT_TAKEN_KEY, 'false');
@@ -173,11 +175,9 @@ const HomeScreen = ({ navigation, route }) => {
             if (placedFlowers.length > 0) {
                 await AsyncStorage.setItem(PLACED_FLOWERS_KEY, JSON.stringify(placedFlowers));
             } else {
-                // 꽃이 없으면 저장된 데이터 삭제
                 await AsyncStorage.removeItem(PLACED_FLOWERS_KEY);
                 const currentSnapshotFlag = await AsyncStorage.getItem(CURRENT_GARDEN_SNAPSHOT_TAKEN_KEY);
                 if (currentSnapshotFlag === 'true') {
-                    // 꽃이 없는데 스냅샷 플래그가 true면 false로 변경
                     await AsyncStorage.setItem(CURRENT_GARDEN_SNAPSHOT_TAKEN_KEY, 'false');
                     setCurrentGardenSnapshotTaken(false);
                 }
@@ -195,7 +195,7 @@ const HomeScreen = ({ navigation, route }) => {
             setIsGardenFull(currentGardenFullState);
         }
     }
-  }, [placedFlowers, isLoadingFlowers, isGardenFull]); // isGardenFull 의존성 추가 (루프 방지 위해 검토 필요할 수 있음)
+  }, [placedFlowers, isLoadingFlowers, isGardenFull]); 
 
   // 정원 스냅샷 촬영 및 저장
   const captureAndSaveGarden = useCallback(async () => {
@@ -216,15 +216,14 @@ const HomeScreen = ({ navigation, route }) => {
       console.error("[HomeScreen] Failed to capture and save garden:", error);
       Alert.alert("오류", "정원 이미지를 저장하는 데 실패했습니다.");
     }
-  }, []); // gardenViewRef는 ref이므로 의존성 배열에 포함하지 않음
+  }, []); 
 
   // 정원이 가득 차면 자동으로 스냅샷 촬영
   useEffect(() => {
     if (isGardenFull && !currentGardenSnapshotTaken && !isLoadingFlowers) {
-      // isLoadingFlowers 조건 추가: 초기 로드 중에는 스냅샷 찍지 않음
       const timer = setTimeout(() => {
         captureAndSaveGarden();
-      }, 500); // 약간의 딜레이를 주어 렌더링 안정화
+      }, 500); 
       return () => clearTimeout(timer);
     }
   }, [isGardenFull, currentGardenSnapshotTaken, captureAndSaveGarden, isLoadingFlowers]);
@@ -239,35 +238,33 @@ const HomeScreen = ({ navigation, route }) => {
       setShowEmotionCheckButton(canDiagnoseToday);
     } catch (error) {
       console.error('[HomeScreen] Failed to check diagnosis status:', error);
-      setShowEmotionCheckButton(true); // 오류 발생 시 기본적으로 버튼 표시
+      setShowEmotionCheckButton(true); 
     }
-  }, [getAppCurrentDate, formatDateToYYYYMMDD]); // 의존성 배열 수정
+  }, [getAppCurrentDate, formatDateToYYYYMMDD]); 
 
   // 화면 포커스 시 실행되는 로직 (날짜 변경에 따른 정원 초기화 및 진단 상태 체크)
   useFocusEffect(
     useCallback(() => {
       const performFocusActions = async () => {
-        if (isLoadingFlowers) return; // 데이터 로딩 중에는 아래 로직 실행 안 함
+        if (isLoadingFlowers) return; 
 
         let gardenWasReset = false;
 
-        // 1. 날짜 변경에 따른 정원 초기화 먼저 시도
         if (isGardenFull && currentGardenSnapshotTaken) {
           try {
-            const lastKnownDateForGarden = await AsyncStorage.getItem(LAST_DIAGNOSIS_DATE_KEY); // 진단 날짜를 정원 사용 날짜로 간주
+            const lastKnownDateForGarden = await AsyncStorage.getItem(LAST_DIAGNOSIS_DATE_KEY); 
             const currentAppDateObj = await getAppCurrentDate();
             const currentAppDateFormatted = formatDateToYYYYMMDD(currentAppDateObj);
 
             if (lastKnownDateForGarden && lastKnownDateForGarden !== currentAppDateFormatted) {
               console.log('[HomeScreen] Date changed, garden was full & snapshot taken. Resetting garden.');
               
-              setPlacedFlowers([]); // 정원 비우기
-              setCurrentGardenSnapshotTaken(false); // 스냅샷 상태 초기화
-              setIsGardenFull(false); // 정원 가득 참 상태 초기화
+              setPlacedFlowers([]); 
+              setCurrentGardenSnapshotTaken(false); 
+              setIsGardenFull(false); 
 
               await AsyncStorage.removeItem(PLACED_FLOWERS_KEY);
               await AsyncStorage.setItem(CURRENT_GARDEN_SNAPSHOT_TAKEN_KEY, 'false');
-              // 이전 진단 날짜 기록 삭제하여 오늘 다시 진단 가능하도록 함
               await AsyncStorage.removeItem(LAST_DIAGNOSIS_DATE_KEY);
               
               gardenWasReset = true;
@@ -277,26 +274,16 @@ const HomeScreen = ({ navigation, route }) => {
             console.error('[HomeScreen] Error in resetting garden logic on date change:', error);
           }
         }
-
-        // 2. 진단 상태 체크 (정원 초기화 여부와 관계없이, 또는 초기화 후 업데이트된 상태로 체크)
-        // 정원이 리셋되었다면 setShowEmotionCheckButton(true)가 이미 호출된 효과가 있으므로,
-        // checkDiagnosisStatus는 최신 LAST_DIAGNOSIS_DATE_KEY를 기반으로 다시 판단함.
         if (gardenWasReset) {
-            setShowEmotionCheckButton(true); // 명시적으로 진단 버튼 보이게 함
+            setShowEmotionCheckButton(true); 
         } else {
-            await checkDiagnosisStatus(); // await 추가하여 순서 보장 및 최신 상태 반영
+            await checkDiagnosisStatus(); 
         }
       };
 
       performFocusActions();
-
-      // 안드로이드 뒤로가기 버튼 처리 (홈 화면에서는 앱 종료 방지 또는 특정 동작)
       const onBackPress = () => {
-        // Alert.alert("앱 종료", "앱을 종료하시겠습니까?", [
-        //   { text: "아니오", style: "cancel" },
-        //   { text: "네", onPress: () => BackHandler.exitApp() }
-        // ]);
-        return true; // true를 반환하면 기본 뒤로가기 동작(앱 종료 등)을 막음
+        return true; 
       };
       const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
       return () => subscription.remove();
@@ -315,7 +302,6 @@ const HomeScreen = ({ navigation, route }) => {
     if (route.params?.diagnosisResult && route.params?.emotionKey && !isLoadingFlowers && Array.isArray(placedFlowers)) {
       const { diagnosisResult, emotionKey, primaryEmotionName, diagnosisMessages, diagnosisDate } = route.params;
       
-      // 네비게이션 파라미터 초기화 (중복 처리 방지)
       if (navigation && typeof navigation.setParams === 'function') {
           navigation.setParams({
               diagnosisResult: undefined,
@@ -362,25 +348,21 @@ const HomeScreen = ({ navigation, route }) => {
                         relativePos: null
                     };
                 } else {
-                    // 심을 수 있는 새 종류의 꽃이 없을 경우, 기존 꽃 중 하나를 모달에 표시
                      if (placedImageKeysForEmotion.length > 0) {
                         flowerImageForModal = allImagesForEmotion[placedImageKeysForEmotion[Math.floor(Math.random() * placedImageKeysForEmotion.length)]];
                     } else {
-                        // 이론상 이 경우는 발생하기 어려움 (allImageKeysForEmotion > 0 이므로)
                         flowerImageForModal = allImagesForEmotion[allImageKeysForEmotion[0]];
                     }
-                    shouldPlantNewFlower = false; // 새 꽃을 심지 않음
-                    // 필요하다면 여기서 사용자에게 알림 (예: "이 감정의 모든 종류의 꽃을 이미 심었어요!")
+                    shouldPlantNewFlower = false; 
                 }
             } else {
-                // 해당 감정에 대한 꽃 이미지가 아예 없는 경우
                 shouldPlantNewFlower = false;
             }
         }
 
         if (shouldPlantNewFlower && newFlowerDataForPlanting && flowerCanvasHeight > 0) {
           setPlacedFlowers(prevFlowers => {
-             if (!Array.isArray(prevFlowers)) { // 방어 코드
+             if (!Array.isArray(prevFlowers)) { 
                 console.warn("[HomeScreen] prevFlowers is not an array during planting.");
                 return prevFlowers;
             }
@@ -394,10 +376,6 @@ const HomeScreen = ({ navigation, route }) => {
                 const randomAvailableIndex = Math.floor(Math.random() * availablePlacementSlots.length);
                 selectedRelativePos = availablePlacementSlots[randomAvailableIndex];
               } else {
-                // 모든 정의된 위치가 찼다면, 랜덤 위치 중 하나를 재사용 (이론상 MAX_FLOWERS 도달 시 발생)
-                // 이 경우는 prevFlowers.length < MAX_FLOWERS 조건과 상충될 수 있으므로,
-                // MAX_FLOWERS에 도달하지 않았는데 availablePlacementSlots가 없는 경우는 로직 오류일 수 있음.
-                // 여기서는 일단 정의된 위치 중 하나를 랜덤하게 선택하는 것으로 가정.
                 console.warn("[HomeScreen] No available placement slots, but garden is not full. Check RELATIVE_FLOWER_POSITIONS and MAX_FLOWERS.");
                 selectedRelativePos = RELATIVE_FLOWER_POSITIONS[Math.floor(Math.random() * RELATIVE_FLOWER_POSITIONS.length)];
               }
@@ -406,11 +384,11 @@ const HomeScreen = ({ navigation, route }) => {
               updatedFlowers.push(newFlowerDataForPlanting);
               return updatedFlowers;
 
-            } else { // 정원이 가득 찬 경우 (MAX_FLOWERS 도달)
+            } else { 
                Alert.alert("알림", "정원이 가득 차서 기존 꽃과 교체합니다.");
                let updatedFlowers = [...prevFlowers];
                const replaceIndex = Math.floor(Math.random() * prevFlowers.length);
-               newFlowerDataForPlanting.relativePos = prevFlowers[replaceIndex].relativePos; // 교체될 꽃의 위치 사용
+               newFlowerDataForPlanting.relativePos = prevFlowers[replaceIndex].relativePos; 
                updatedFlowers.splice(replaceIndex, 1, newFlowerDataForPlanting);
                return updatedFlowers;
             }
@@ -418,7 +396,7 @@ const HomeScreen = ({ navigation, route }) => {
         }
 
         setResultModalMessage(result);
-        setResultModalImage(flowerImageForModal); // 새 꽃이 없더라도, 해당 감정의 기존 꽃을 보여줄 수 있음
+        setResultModalImage(flowerImageForModal); 
         setResultModalEmotionIcon(emotionIconForModal);
         setIsResultModalVisible(true);
       };
@@ -426,7 +404,6 @@ const HomeScreen = ({ navigation, route }) => {
       processDiagnosisResult(diagnosisResult, emotionKey, primaryEmotionName, diagnosisMessages);
 
     } else if (route.params?.diagnosisResult && isLoadingFlowers) {
-         // 로딩 중에 진단 결과가 도착하면 파라미터만 정리 (처리를 위해 로딩 완료까지 기다리지 않음)
          if (navigation && typeof navigation.setParams === 'function') {
             navigation.setParams({
                 diagnosisResult: undefined, emotionKey: undefined,
@@ -440,7 +417,7 @@ const HomeScreen = ({ navigation, route }) => {
   useEffect(() => {
     if (Array.isArray(placedFlowers)) {
         const flowerCount = placedFlowers.length;
-        let newTreeImageSource = IMAGES.treeImage; // 기본 나무
+        let newTreeImageSource = IMAGES.treeImage; 
         let newImageScalingFactor = TREE_IMAGE_SCALE_BASE;
 
         if (flowerCount >= 10 && IMAGES.Tree_10) { newTreeImageSource = IMAGES.Tree_10; newImageScalingFactor = TREE_IMAGE_SCALE_10; }
@@ -448,12 +425,29 @@ const HomeScreen = ({ navigation, route }) => {
         else if (flowerCount >= 6 && IMAGES.Tree_6) { newTreeImageSource = IMAGES.Tree_6; newImageScalingFactor = TREE_IMAGE_SCALE_6; }
         else if (flowerCount >= 4 && IMAGES.Tree_4) { newTreeImageSource = IMAGES.Tree_4; newImageScalingFactor = TREE_IMAGE_SCALE_4; }
         else if (flowerCount >= 2 && IMAGES.Tree_2) { newTreeImageSource = IMAGES.Tree_2; newImageScalingFactor = TREE_IMAGE_SCALE_2; }
-        // flowerCount가 0 또는 1일 때는 기본 나무와 스케일 사용
-
+        
         if (currentTreeImageSource !== newTreeImageSource) { setCurrentTreeImageSource(newTreeImageSource); }
         if (currentTreeImageScalingFactor !== newImageScalingFactor) { setCurrentTreeImageScalingFactor(newImageScalingFactor); }
     }
-  }, [placedFlowers, currentTreeImageSource, currentTreeImageScalingFactor]); // current 상태값들도 의존성에 추가
+  }, [placedFlowers, currentTreeImageSource, currentTreeImageScalingFactor]); 
+
+  // 꽃 정보 모달이 열리고, "대화 기록 보기"가 활성화될 때, 메시지 데이터 로딩 상태를 관리
+  useEffect(() => {
+    if (isFlowerInfoModalVisible && showChatHistoryInModal) {
+      if (selectedFlowerData && selectedFlowerData.messages) {
+        setIsLoadingChatHistory(true); 
+        const timer = setTimeout(() => {
+            setIsLoadingChatHistory(false);
+        }, 50); 
+        return () => clearTimeout(timer);
+      } else {
+        setIsLoadingChatHistory(false); 
+      }
+    } else {
+      setIsLoadingChatHistory(false); 
+    }
+  }, [isFlowerInfoModalVisible, showChatHistoryInModal, selectedFlowerData]);
+
 
   // --- 핸들러 함수들 ---
   const handleEmotionCheckPress = () => setIsModalVisible(true);
@@ -463,7 +457,6 @@ const HomeScreen = ({ navigation, route }) => {
   };
   const handleSimpleEmotionCheck = () => {
       setIsModalVisible(false);
-      // 네비게이션 시 현재 화면 상태를 전달할 필요는 없음
       navigation.navigate('SimpleDiagnosis');
   };
   const handleModalClose = () => setIsModalVisible(false);
@@ -471,7 +464,6 @@ const HomeScreen = ({ navigation, route }) => {
     setIsResultModalVisible(false);
     setResultModalEmotionIcon(null);
     setResultModalImage(null);
-    // 결과 모달 닫힐 때 진단 상태 다시 체크 (오늘 진단 완료했으면 버튼 숨김)
     checkDiagnosisStatus();
   };
 
@@ -483,11 +475,11 @@ const HomeScreen = ({ navigation, route }) => {
         emotionKey: flower.emotionKey,
         imageKey: flower.imageKey,
         emotionName: flower.emotionName || keyToEmotionNameMap[flower.emotionKey] || '감정 정보 없음',
-        messages: flower.messages || [],
+        messages: flower.messages || [], 
         creationDate: flower.creationDate || null,
         relativePos: flower.relativePos
     });
-    setShowChatHistoryInModal(false);
+    setShowChatHistoryInModal(false); 
     setIsFlowerInfoModalVisible(true);
   };
 
@@ -526,11 +518,10 @@ const HomeScreen = ({ navigation, route }) => {
       )}
 
       {!isLoadingFlowers && (
-        // ViewShot의 key를 추가하여 placedFlowers가 초기화될 때 ViewShot 내부도 리렌더링 유도 (필요 시)
         <ViewShot key={Array.isArray(placedFlowers) ? placedFlowers.length : 'initial'} ref={gardenViewRef} options={{ format: 'jpg', quality: 0.8, result: "base64" }} style={styles.gardenCaptureArea}>
           <ImageBackground source={IMAGES.background} style={styles.backgroundImageFill} resizeMode="cover">
             {flowerCanvasHeight > 0 && Array.isArray(placedFlowers) && placedFlowers.map(flower => {
-              if (!flower || !flower.source) { // 방어 코드: flower 객체나 source가 없을 경우 렌더링 건너뛰기
+              if (!flower || !flower.source) { 
                 console.warn("[HomeScreen] Invalid flower data for rendering:", flower);
                 return null;
               }
@@ -539,14 +530,12 @@ const HomeScreen = ({ navigation, route }) => {
               const flowerDisplayHeight = currentFlowerPixelHeight;
               const flowerDisplayWidth = flowerDisplayHeight * flowerImageAspectRatio;
               
-              // relativePos가 없을 경우 기본 중앙값 사용
               const topRatio = flower.relativePos?.topRatio !== undefined ? flower.relativePos.topRatio : 0.5;
               const leftRatio = flower.relativePos?.leftRatio !== undefined ? flower.relativePos.leftRatio : 0.5;
 
               let calculatedTop = flowerCanvasStartY + (topRatio * flowerCanvasHeight) - (flowerDisplayHeight / 2);
               let calculatedLeft = flowerCanvasPaddingHorizontal + (leftRatio * flowerCanvasWidth) - (flowerDisplayWidth / 2);
               
-              // 꽃이 캔버스 영역을 벗어나지 않도록 위치 조정
               calculatedTop = Math.max(flowerCanvasStartY, Math.min(calculatedTop, flowerCanvasEndY - flowerDisplayHeight));
               calculatedLeft = Math.max(flowerCanvasPaddingHorizontal, Math.min(calculatedLeft, flowerCanvasPaddingHorizontal + flowerCanvasWidth - flowerDisplayWidth));
               
@@ -563,7 +552,7 @@ const HomeScreen = ({ navigation, route }) => {
                             left: calculatedLeft 
                         } 
                     ]}
-                    activeOpacity={0.8} // 터치 피드백
+                    activeOpacity={0.8} 
                 >
                   <Image source={flower.source} style={styles.placedFlowerImageActual} resizeMode="contain" />
                 </TouchableOpacity>
@@ -587,11 +576,10 @@ const HomeScreen = ({ navigation, route }) => {
         {!isLoadingFlowers && showEmotionCheckButton && (
           <View style={styles.bottomAreaContent}>
             <View style={styles.buttonWrapper}>
-              {/* "감정 진단하기" 버튼 변경 */}
               <TouchableOpacity 
                 onPress={handleEmotionCheckPress} 
                 activeOpacity={0.7} 
-                style={styles.mainActionButton} // 변경된 스타일 적용
+                style={styles.mainActionButton} 
               >
                 <Text style={styles.mainActionButtonText}>감정 진단하기</Text>
               </TouchableOpacity>
@@ -609,18 +597,16 @@ const HomeScreen = ({ navigation, route }) => {
             <View style={styles.modalContent}>
               <Text style={styles.modalText}>감정 진단을 시작하시겠습니까?</Text>
               <View style={styles.modalButtons}>
-                {/* "간단 진단" 버튼 변경 */}
                 <TouchableOpacity 
                   onPress={handleSimpleEmotionCheck} 
-                  style={styles.modalDialogButton} // 변경된 스타일 적용
+                  style={styles.modalDialogButton} 
                   activeOpacity={0.7}
                 >
                   <Text style={styles.modalDialogButtonText}>간단 진단</Text>
                 </TouchableOpacity>
-                {/* "심층 진단" 버튼 변경 */}
                 <TouchableOpacity 
                   onPress={handleConfirmEmotionCheck} 
-                  style={styles.modalDialogButton} // 변경된 스타일 적용
+                  style={styles.modalDialogButton} 
                   activeOpacity={0.7}
                 >
                   <Text style={styles.modalDialogButtonText}>심층 진단</Text>
@@ -652,21 +638,43 @@ const HomeScreen = ({ navigation, route }) => {
             <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={handleFlowerInfoModalClose}>
                 <TouchableOpacity 
                     activeOpacity={1} 
-                    style={[styles.flowerInfoModalContainer, { height: windowHeight * 0.6, maxHeight: 500 }]} // 높이 조정 및 최대 높이 설정
+                    style={[styles.flowerInfoModalContainer, { height: windowHeight * 0.6, maxHeight: 500 }]} 
                 >
                     <View style={styles.flowerInfoModalContent}>
-                        {showChatHistoryInModal && selectedFlowerData.messages && selectedFlowerData.messages.length > 0 ? (
+                        {showChatHistoryInModal ? ( 
                             <>
                                 <Text style={styles.flowerInfoTitle}>대화 기록</Text>
                                 <View style={styles.chatHistoryContainer}>
-                                    <FlatList
-                                        data={selectedFlowerData.messages}
-                                        renderItem={renderChatHistoryItem}
-                                        keyExtractor={(item, index) => item.id || `chat-message-${index}-${Date.now()}`} // 더 고유한 키
-                                        contentContainerStyle={{ paddingBottom: 10 }}
-                                        style={{ flex: 1 }}
-                                        inverted={false} // 일반적으로 채팅은 inverted 사용하지만, 여기서는 메시지 순서대로
-                                    />
+                                    {isLoadingChatHistory ? ( 
+                                        <View style={styles.chatLoadingContainer}>
+                                            <ListActivityIndicator size="small" color="#2196F3" />
+                                            <Text style={styles.chatLoadingText}>대화 기록 불러오는 중...</Text>
+                                        </View>
+                                    ) : (
+                                        (selectedFlowerData.messages && selectedFlowerData.messages.length >= 0) ? (
+                                            <FlatList
+                                                ref={chatHistoryFlatListRef} 
+                                                data={selectedFlowerData.messages}
+                                                renderItem={renderChatHistoryItem}
+                                                keyExtractor={(item, index) => item.id || `chat-msg-${index}-${Date.now()}`}
+                                                style={{ flex: 1 }} 
+                                                contentContainerStyle={{ paddingBottom: 10, flexGrow: 1 }} 
+                                                ListEmptyComponent={ 
+                                                    <View style={styles.emptyChatContainer}>
+                                                        <Text style={styles.emptyChatText}>대화 기록이 없습니다.</Text>
+                                                    </View>
+                                                }
+                                                extraData={selectedFlowerData.messages} 
+                                                initialNumToRender={10}
+                                                windowSize={5}
+                                                removeClippedSubviews={Platform.OS === 'android'} 
+                                            />
+                                        ) : (
+                                            <View style={styles.emptyChatContainer}>
+                                                <Text style={styles.emptyChatText}>대화 기록을 불러올 수 없습니다.</Text>
+                                            </View>
+                                        )
+                                    )}
                                 </View>
                                 <View style={styles.flowerInfoButtonArea}>
                                     <TouchableOpacity onPress={handleToggleChatHistoryInModal} style={styles.flowerInfoButton}>
@@ -677,7 +685,7 @@ const HomeScreen = ({ navigation, route }) => {
                                     </TouchableOpacity>
                                 </View>
                             </>
-                        ) : (
+                        ) : ( 
                             <>
                                 <Text style={styles.flowerInfoTitle}>
                                     {selectedFlowerData.creationDate || '날짜 정보 없음'}
@@ -699,7 +707,6 @@ const HomeScreen = ({ navigation, route }) => {
                                     <TouchableOpacity onPress={handleFlowerInfoModalClose} style={[
                                         styles.flowerInfoButton, 
                                         styles.flowerInfoCloseButton,
-                                        // 대화 기록 버튼이 없을 경우 닫기 버튼만 중앙에 오도록 마진 조정 (선택적)
                                         !(selectedFlowerData.messages && selectedFlowerData.messages.length > 0) && { alignSelf: 'center'}
                                     ]}>
                                         <Text style={styles.flowerInfoButtonText}>닫기</Text>
@@ -719,7 +726,7 @@ const HomeScreen = ({ navigation, route }) => {
 
 // --- 스타일 정의 ---
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#eef7ff' }, // 배경색 통일감
+  safeArea: { flex: 1, backgroundColor: '#eef7ff' }, 
   loadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255, 255, 255, 0.8)', justifyContent: 'center', alignItems: 'center', zIndex: 999, },
   loadingText: { marginTop: 10, fontSize: 16, color: '#333', },
   gardenCaptureArea: { flex: 1, },
@@ -730,21 +737,20 @@ const styles = StyleSheet.create({
   treeContainer: { justifyContent: 'flex-end', alignItems: 'center', overflow: 'hidden', },
   uiOverlayContainer: { position: 'absolute', left: 0, right: 0, bottom: 0, },
   bottomAreaContent: { paddingBottom: ESTIMATED_NAV_BAR_HEIGHT + 10, alignItems: 'center', justifyContent: 'flex-end', minHeight: ESTIMATED_NAV_BAR_HEIGHT + BUTTON_BOTTOM_FIXED_MARGIN + 50 },
-  buttonWrapper: { marginBottom: BUTTON_BOTTOM_FIXED_MARGIN, alignItems: 'center', width: '80%', maxWidth: 300}, // 버튼 너비 제한
+  buttonWrapper: { marginBottom: BUTTON_BOTTOM_FIXED_MARGIN, alignItems: 'center', width: '80%', maxWidth: 300}, 
 
-  // "감정 진단하기" 버튼 스타일 (기존 gradientButton, fullWidthTouchable, buttonText 대체/수정)
   mainActionButton: {
-    backgroundColor: '#2196F3', // flowerInfoButton과 동일한 배경색
-    paddingVertical: 10,       // flowerInfoButton과 유사한 세로 패딩
-    paddingHorizontal: 25,     // 가로 패딩은 기존 유지 또는 조정 가능
-    borderRadius: 8,           // flowerInfoButton과 동일한 모서리 둥글기
+    backgroundColor: '#2196F3', 
+    paddingVertical: 10,       
+    paddingHorizontal: 25,     
+    borderRadius: 8,           
     alignItems: 'center',
     justifyContent: 'center',
-    width: '100%',             // 부모 buttonWrapper의 너비를 따름
-    elevation: 0,              // 그림자 제거 (flowerInfoButton과 유사하게)
-    shadowOpacity: 0,          // 그림자 제거
+    width: '100%',             
+    elevation: 0,              
+    shadowOpacity: 0,          
   },
-  mainActionButtonText: {      // 기존 buttonText와 거의 동일, 필요시 조정
+  mainActionButtonText: {      
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
@@ -753,29 +759,28 @@ const styles = StyleSheet.create({
   
   navigationBarPlacement: { width: '100%', position: 'absolute', bottom: 0, },
   modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0, 0, 0, 0.6)' },
-  modalContentContainer: { /* 스타일 불필요 또는 커스텀 */ },
+  modalContentContainer: { },
   modalContent: { width: '80%', maxWidth: 350, padding: 25, backgroundColor: '#fff', borderRadius: 10, alignItems: 'center', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 },
   modalText: { fontSize: 18, marginBottom: 25, color: '#333', textAlign: 'center', fontWeight: '500' },
-  modalButtons: { flexDirection: 'row', gap: 10, width: '100%' }, // gap 사용, 너비 100%
+  modalButtons: { flexDirection: 'row', gap: 10, width: '100%' }, 
   
-  // "간단 진단", "심층 진단" 버튼 스타일 (기존 modalButtonGradient, modalButton, modalButtonText 대체/수정)
   modalDialogButton: {
-    backgroundColor: '#2196F3', // flowerInfoButton과 동일한 배경색
-    paddingVertical: 10,       // flowerInfoButton과 유사한 세로 패딩
-    paddingHorizontal: 15,     // 가로 패딩은 기존 modalButton 값 유지 또는 조정
-    borderRadius: 8,           // flowerInfoButton과 동일한 모서리 둥글기
+    backgroundColor: '#2196F3', 
+    paddingVertical: 10,       
+    paddingHorizontal: 15,     
+    borderRadius: 8,           
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,                   // 부모 modalButtons 내에서 공간 균등 분배
-    elevation: 0,              // 그림자 제거 (flowerInfoButton과 유사하게)
+    flex: 1,                   
+    elevation: 0,              
   },
-  modalDialogButtonText: {     // 기존 modalButtonText와 거의 동일
+  modalDialogButtonText: {     
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },
 
-  resultModalContentContainer: { /* 스타일 불필요 또는 커스텀 */ },
+  resultModalContentContainer: { },
   resultModalContent: { width: '80%', maxWidth: 300, padding: 20, backgroundColor: 'white', borderRadius: 15, alignItems: 'center', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 },
   resultEmotionIcon: { width: 50, height: 50, marginBottom: 10, },
   resultFlowerImage: { width: 100, height: 100, marginBottom: 15, },
@@ -783,49 +788,51 @@ const styles = StyleSheet.create({
   resultModalText: { fontSize: 17, color: '#333', textAlign: 'center', marginBottom: 25, lineHeight: 24 },
   resultCloseButton: { backgroundColor: '#007bff', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 30, marginTop: 10 },
   resultCloseButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  
   flowerInfoModalContainer: { 
     width: '85%', 
     maxWidth: 380, 
     backgroundColor: 'white', 
     borderRadius: 15, 
-    paddingHorizontal: 20,
     elevation: 5, 
     shadowColor: '#000', 
     shadowOffset: { width: 0, height: 2 }, 
     shadowOpacity: 0.25, 
     shadowRadius: 3.84, 
-    overflow: 'hidden', // 내부 컨텐츠가 borderRadius를 넘지 않도록
+    overflow: 'hidden', 
   },
   flowerInfoModalContent: { 
     width: '100%', 
-    flex: 1,
-    justifyContent: 'space-between',
-    paddingVertical: 20, 
+    flex: 1, 
+    flexDirection: 'column', 
+    paddingHorizontal: 20, 
+    paddingVertical: 15,   
   },
   flowerInfoTitle: { 
-    fontSize: 20, // 약간 줄임
+    fontSize: 20, 
     fontWeight: 'bold', 
     color: '#333', 
     textAlign: 'center',
-    marginBottom: 15,
+    marginBottom: 15, 
+    flexShrink: 0, 
   },
   flowerInfoMainContent: { 
     flex: 1, 
     justifyContent: 'center', 
     alignItems: 'center', 
     width: '100%',
-    paddingVertical: 10, // 컨텐츠와 타이틀/버튼 영역 사이 간격
+    paddingVertical: 10, 
   },
   emotionDisplayArea: { 
     alignItems: 'center',
   },
   flowerInfoEmotionIcon: { 
-    width: 80, // 약간 줄임
-    height: 80, // 약간 줄임
+    width: 80, 
+    height: 80, 
     marginBottom: 10, 
   },
   flowerInfoEmotionName: { 
-    fontSize: 18, // 약간 줄임
+    fontSize: 18, 
     color: '#444', 
     fontWeight: '500', 
     textAlign: 'center',
@@ -833,17 +840,16 @@ const styles = StyleSheet.create({
   flowerInfoButtonArea: { 
     width: '100%',
     alignItems: 'center', 
-    paddingTop: 10, 
-    flexDirection: 'column', // 버튼들을 세로로 나열 (여러 개일 경우)
-    gap: 10, // 버튼 사이 간격
+    paddingTop: 15, 
+    flexDirection: 'column', 
+    gap: 10, 
+    flexShrink: 0, 
   },
   flowerInfoButton: { 
     backgroundColor: '#2196F3', 
     paddingVertical: 10, 
-    // paddingHorizontal: 20, // 너비 100%로 변경
     borderRadius: 8, 
-    // marginTop: 10, // gap으로 대체
-    width: '90%', // 버튼 너비 조정
+    width: '90%', 
     alignItems: 'center', 
   },
   flowerInfoCloseButton: { 
@@ -854,15 +860,34 @@ const styles = StyleSheet.create({
     fontSize: 16, 
     fontWeight: 'bold', 
   },
+
   chatHistoryContainer: {
     flex: 1, 
     width: '100%',
-    marginBottom: 10, 
     paddingHorizontal: 5, 
-    // backgroundColor: '#f9f9f9', // 배경색 추가하여 구분 용이
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: '#eee',
+    // overflow: 'hidden', // 제거 또는 주석 처리 유지
+  },
+  chatLoadingContainer: { // 대화 기록 로딩 중 스타일
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chatLoadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#666',
+  },
+  emptyChatContainer: { // 대화 기록 없을 때 스타일
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyChatText: {
+    fontSize: 15,
+    color: '#888',
   },
   chatMessageOuterContainer: { 
     flexDirection: 'row',
@@ -872,12 +897,12 @@ const styles = StyleSheet.create({
   chatBotRowContainer: {
     justifyContent: 'flex-start',
     alignSelf: 'flex-start',
-    paddingRight: '15%', // 패딩 조정
+    paddingRight: '15%', 
   },
   chatUserRowContainer: {
     justifyContent: 'flex-end',
     alignSelf: 'flex-end',
-    paddingLeft: '15%', // 패딩 조정
+    paddingLeft: '15%', 
   },
   chatMessageBubble: {
     paddingHorizontal: 12,
@@ -888,7 +913,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 1,
-    maxWidth: '100%', // 버블이 너무 커지지 않도록
+    maxWidth: '100%', 
   },
   chatBotBubble: {
     backgroundColor: '#e5e5ea', 
