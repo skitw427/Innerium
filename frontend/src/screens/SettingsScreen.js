@@ -14,11 +14,11 @@ import {
   Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LinearGradient } from 'expo-linear-gradient';
+// LinearGradient는 이제 팝업 버튼에도 사용하지 않으므로 제거 가능 (만약 다른 곳에서 안 쓴다면)
+// import { LinearGradient } from 'expo-linear-gradient';
 import NavigationBar from '../components/NavigationBar';
 import useScreenTransition from '../hooks/useScreenTransition';
-import IMAGES from '../constants/images'; // IMAGES 경로가 올바른지 확인해주세요.
-// 유틸리티 함수 import (formatDateTimeTo상세형식 포함)
+import IMAGES from '../constants/images';
 import { APP_DATE_OFFSET_KEY, getAppCurrentDate, formatDateToYYYYMMDD, formatDateTimeTo상세형식 } from '../utils/dateUtils';
 
 const SettingsScreen = ({ navigation }) => {
@@ -62,9 +62,7 @@ const SettingsScreen = ({ navigation }) => {
 
       await AsyncStorage.setItem(APP_DATE_OFFSET_KEY, newOffset.toString());
 
-      const newAppDate = await getAppCurrentDate(); // 변경된 오프셋으로 앱 현재 날짜 다시 계산
-
-      // 날짜와 시간을 포맷팅
+      const newAppDate = await getAppCurrentDate();
       const formattedDateTime = formatDateTimeTo상세형식(newAppDate);
 
       Alert.alert(
@@ -80,7 +78,7 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   const handleCancelDateChange = () => { setIsDateChangeModalVisible(false); };
-  const handleModalClose = () => { setIsDateChangeModalVisible(false); }; // Modal의 onRequestClose 핸들러
+  const handleModalClose = () => { setIsDateChangeModalVisible(false); };
 
   return (
     <>
@@ -88,6 +86,7 @@ const SettingsScreen = ({ navigation }) => {
         <View style={styles.mainScreenContainer}>
           <View style={[styles.contentWrapper, { paddingHorizontal: width * 0.05 }]}>
             <View style={styles.settingsMenuContainer}>
+              {/* ... (계정 연동, 알림, 배경 음악, 도움말 설정 옵션은 동일) ... */}
               <View style={styles.settingsOptionRow}>
                 <Text style={styles.settingsLabel}>계정 연동</Text>
                 <TouchableOpacity style={styles.linkButton} onPress={handleLinkAccountPress}>
@@ -115,7 +114,6 @@ const SettingsScreen = ({ navigation }) => {
               <View style={styles.settingsOptionRow}>
                 <View style={styles.labelWithIconContainer}>
                   <Text style={styles.settingsLabel}>도움말</Text>
-                  {/* IMAGES.helpIcon이 정의되어 있다고 가정합니다. */}
                   <TouchableOpacity onPress={handleHelpPress} style={styles.helpButton}>
                     <Image source={IMAGES.helpIcon} style={styles.helpIcon} />
                   </TouchableOpacity>
@@ -124,11 +122,14 @@ const SettingsScreen = ({ navigation }) => {
             </View>
 
             <View style={styles.dateChangeButtonContainer}>
-              <LinearGradient colors={['#4CAF50', '#8BC34A']} style={styles.gradientButton}>
-                <TouchableOpacity onPress={handleDateChangePress} style={styles.touchableButton} disabled={isTransitioning}>
-                  <Text style={styles.buttonText}>날짜 넘기기</Text>
-                </TouchableOpacity>
-              </LinearGradient>
+              <TouchableOpacity
+                onPress={handleDateChangePress}
+                style={styles.dateChangeButton}
+                disabled={isTransitioning}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.mainButtonText}>날짜 넘기기</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -143,11 +144,9 @@ const SettingsScreen = ({ navigation }) => {
 
       <Modal
         visible={isDateChangeModalVisible} transparent={true}
-        animationType="fade" onRequestClose={handleModalClose} // 안드로이드 뒤로가기 버튼 등으로 모달 닫힐 때 호출
+        animationType="fade" onRequestClose={handleModalClose}
       >
-        {/* Modal 바깥 영역 클릭 시 닫기 위한 TouchableOpacity */}
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={handleModalClose}>
-           {/* Modal 컨텐츠 영역이 바깥 영역 클릭에 영향받지 않도록 TouchableOpacity로 감쌈 */}
            <TouchableOpacity activeOpacity={1} style={styles.modalContentContainer}>
              <View style={styles.modalContent}>
                <Text style={styles.modalTitle}>날짜 넘기기 확인</Text>
@@ -155,16 +154,22 @@ const SettingsScreen = ({ navigation }) => {
                  '날짜 넘기기'는 앱의 원활한 심사를 위해 날짜 변경을 강제로 시행하는 기능입니다. 다음 날짜로 넘어가시겠습니까?
                </Text>
                <View style={styles.modalButtons}>
-                 <LinearGradient colors={['#BDBDBD', '#9E9E9E']} style={styles.modalButtonGradient}>
-                    <TouchableOpacity onPress={handleCancelDateChange} style={styles.modalButton}>
-                        <Text style={styles.modalButtonText}>아니요</Text>
-                    </TouchableOpacity>
-                 </LinearGradient>
-                 <LinearGradient colors={['#4CAF50', '#8BC34A']} style={styles.modalButtonGradient}>
-                    <TouchableOpacity onPress={handleConfirmDateChange} style={styles.modalButton}>
-                        <Text style={styles.modalButtonText}>네</Text>
-                    </TouchableOpacity>
-                 </LinearGradient>
+                 {/* "아니요" 버튼 - HomeScreen의 닫기 버튼 스타일 적용 */}
+                 <TouchableOpacity
+                    onPress={handleCancelDateChange}
+                    style={[styles.modalButtonBase, styles.modalNoButton]} // 새로운 스타일 적용
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.modalButtonText}>아니요</Text>
+                 </TouchableOpacity>
+                 {/* "네" 버튼 - HomeScreen의 대화 기록 보기 버튼 스타일 적용 */}
+                 <TouchableOpacity
+                    onPress={handleConfirmDateChange}
+                    style={[styles.modalButtonBase, styles.modalYesButton]} // 새로운 스타일 적용
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.modalButtonText}>네</Text>
+                 </TouchableOpacity>
                </View>
              </View>
            </TouchableOpacity>
@@ -176,6 +181,7 @@ const SettingsScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  // ... (기존 스타일 safeAreaWithBackground부터 helpIcon까지는 동일)
   safeAreaWithBackground: {
     flex: 1,
     backgroundColor: '#eef7ff',
@@ -189,19 +195,19 @@ const styles = StyleSheet.create({
   },
   settingsMenuContainer: {
     flex: 1,
-    paddingTop: 40, // 필요에 따라 조정
+    paddingTop: 40,
   },
   settingsOptionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 18, // 상하 패딩
+    paddingVertical: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef', // 구분선 색상
+    borderBottomColor: '#e9ecef',
   },
   settingsLabel: {
     fontSize: 17,
-    color: '#495057', // 레이블 텍스트 색상
+    color: '#495057',
     fontWeight: '500',
   },
   labelWithIconContainer: {
@@ -210,7 +216,7 @@ const styles = StyleSheet.create({
   },
   linkButton: {
     borderWidth: 1,
-    borderColor: '#adb5bd', // 버튼 테두리 색상
+    borderColor: '#adb5bd',
     borderRadius: 6,
     paddingVertical: 7,
     paddingHorizontal: 14,
@@ -221,10 +227,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   switchStyle: {
-    transform: [{ scaleX: 0.9 }, { scaleY: 0.9 }], // 스위치 크기 미세 조정
+    transform: [{ scaleX: 0.9 }, { scaleY: 0.9 }],
   },
   helpButton: {
-    padding: 5, // 아이콘 주변 터치 영역 확보
+    padding: 5,
     marginLeft: 8,
   },
   helpIcon: {
@@ -233,57 +239,52 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
   },
   dateChangeButtonContainer: {
-    alignItems: 'center', // 버튼 중앙 정렬
-    paddingBottom: 20, // 하단 여백
-    paddingTop: 20, // 상단 여백 (메뉴와 버튼 사이 공간)
+    alignItems: 'center',
+    paddingBottom: 20,
+    paddingTop: 20,
   },
-  gradientButton: {
+  dateChangeButton: {
+    backgroundColor: '#2196F3',
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 25,
-    minWidth: 150, // 버튼 최소 너비
-    alignItems: 'center',
-    elevation: 3, // 안드로이드 그림자
-    shadowColor: '#000', // iOS 그림자
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.5,
-  },
-  touchableButton: {
-    width: '100%', // LinearGradient 내부에서 전체 너비 차지
+    minWidth: 150,
     alignItems: 'center',
     justifyContent: 'center',
+    width: '80%',
+    maxWidth: 300,
+    // 그림자 효과 제거
+    // elevation: 3,
+    // shadowColor: '#000',
+    // shadowOffset: { width: 0, height: 1 },
+    // shadowOpacity: 0.2,
+    // shadowRadius: 1.5,
   },
-  buttonText: {
-    color: '#fff', // 버튼 텍스트 색상
+  mainButtonText: { // "날짜 넘기기" 버튼 텍스트 (기존 buttonText에서 이름 변경)
+    color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },
   navigationBarPlacement: {
     width: '100%',
-    // position: 'absolute', // 필요에 따라 (absolute 사용 시 mainScreenContainer에서 justifyContent 조정)
-    // bottom: 0,
   },
   // Modal 스타일
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)', // 반투명 배경
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  modalContentContainer: { // 모달 컨텐츠 영역이 배경 클릭에 반응하지 않도록 함
-    // 이 TouchableOpacity는 activeOpacity={1}로 설정되어 클릭 효과가 없음
-    // 특별한 스타일링이 필요하지 않을 수 있음
-  },
+  modalContentContainer: {},
   modalContent: {
-    width: '80%', // 화면 너비의 80%
-    maxWidth: 350, // 최대 너비 제한
+    width: '80%',
+    maxWidth: 350,
     padding: 20,
-    backgroundColor: '#fff', // 모달 배경색
+    backgroundColor: '#fff',
     borderRadius: 10,
-    alignItems: 'center', // 내부 요소들 중앙 정렬
-    elevation: 5, // 안드로이드 그림자
-    shadowColor: '#000', // iOS 그림자
+    alignItems: 'center',
+    elevation: 5, // 모달 자체의 그림자는 유지 (선택 사항)
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
@@ -300,29 +301,37 @@ const styles = StyleSheet.create({
     color: '#555',
     textAlign: 'center',
     marginBottom: 20,
-    lineHeight: 21, // 줄 간격
+    lineHeight: 21,
   },
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'center', // 버튼들을 중앙에 배치 (또는 space-around 등)
-    width: '100%', // 버튼 컨테이너가 모달 너비 전체 차지
-    gap: 15, // 버튼 사이 간격 (React Native 0.70 이상 지원)
-             // gap 미지원 시, 각 버튼에 marginHorizontal 등으로 간격 조절
+    width: '100%',
+    gap: 15,
   },
-  modalButtonGradient: {
+  // 모달 버튼 공통 스타일 (HomeScreen의 flowerInfoButton과 유사하게)
+  modalButtonBase: {
     borderRadius: 8,
-    flex: 1, // 가능한 공간을 버튼들이 나눠 가짐
-    maxWidth: 150, // 각 버튼의 최대 너비 (선택 사항)
-  },
-  modalButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 15, // 버튼 내부 패딩
+    paddingVertical: 10, // HomeScreen flowerInfoButton과 동일하게
+    // paddingHorizontal: 20, // HomeScreen flowerInfoButton과 동일하게 (내부 텍스트에 따라 자동 조절되도록 제거 또는 유지)
     alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1, // 가능한 공간을 버튼들이 나눠 가짐
+    minHeight: 44, // 최소 터치 높이 (선택 사항)
+    // maxWidth: 150, // 각 버튼의 최대 너비 (선택 사항, 필요시 주석 해제)
   },
-  modalButtonText: {
+  // "네" 버튼 스타일 (HomeScreen의 대화 기록 보기 버튼 스타일)
+  modalYesButton: {
+    backgroundColor: '#2196F3',
+  },
+  // "아니요" 버튼 스타일 (HomeScreen의 닫기 버튼 스타일)
+  modalNoButton: {
+    backgroundColor: '#757575',
+  },
+  modalButtonText: { // 모달 버튼 텍스트 (HomeScreen의 flowerInfoButtonText와 동일하게)
     color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16, // HomeScreen flowerInfoButtonText와 동일하게
+    fontWeight: 'bold', // HomeScreen flowerInfoButtonText와 동일하게
   },
 });
 
