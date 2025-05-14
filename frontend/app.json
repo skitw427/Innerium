@@ -19,7 +19,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "softwareKeyboardLayoutMode": "resize" // 이 부분이 추가되었습니다.
     },
     "web": {
       "favicon": "./assets/favicon.png"

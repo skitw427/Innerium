@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context'; // 올바른 SafeAreaProvider 사용 중
 import { View, ActivityIndicator, Text, StyleSheet, Button } from 'react-native';
 
 import AppNavigator from './src/navigation/AppNavigator';
@@ -24,7 +24,7 @@ const AppContent = () => {
       <View style={styles.container}>
         <Text style={styles.errorText}>앱을 사용하려면 인증이 필요합니다.</Text>
         <Text style={styles.infoText}>네트워크 연결을 확인 후 다시 시도해주세요.</Text>
-        <Button title="다시 시도" onPress={() => refreshAuth()} />
+        <Button title="다시 시도" onPress={refreshAuth} /> {/* () => refreshAuth() 대신 직접 전달 */}
       </View>
     );
   }
@@ -53,7 +53,8 @@ const MainApp = () => {
       <View style={styles.container}>
         <Text style={styles.errorText}>정원 정보를 가져오지 못했습니다.</Text>
         <Text style={styles.infoText}>{gardenError}</Text>
-        <Button title="다시 시도" onPress={() => {refreshCurrentGarden()}} />
+        {/* 수정된 부분: 불필요한 중괄호와 화살표 함수 제거 */}
+        <Button title="다시 시도" onPress={refreshCurrentGarden} />
       </View>
     );
   }
