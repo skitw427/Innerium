@@ -8,7 +8,7 @@ import {
   StyleSheet, View, TouchableOpacity, Image, Text,
   ImageBackground, SafeAreaView, useWindowDimensions, Modal, ActivityIndicator,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+// import { LinearGradient } from 'expo-linear-gradient'; // LinearGradient 더 이상 사용하지 않음 (해당 버튼들에서)
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ViewShot from 'react-native-view-shot';
 import NavigationBar from '../components/NavigationBar';
@@ -49,6 +49,7 @@ const emotionToKeyMap = {
   '행복': 'H', '불안': 'Ax', '평온': 'R', '슬픔': 'S',
   '분노': 'Ag', '두려움': 'F', '갈망': 'Dr', '역겨움': 'Dg',
 };
+
 
 const HomeScreen = ({ navigation, route }) => {
   // --- State 및 Hooks ---
@@ -325,45 +326,6 @@ const HomeScreen = ({ navigation, route }) => {
           });
       }
 
-  //     const showResultAndRefreshGarden = async (result, key, name, messages, diagDate) => {
-  //       try {
-  //         const recordResponse = await getDailyRecordResult(diagDate);
-  //         const recordData = recordResponse.data;
-
-  //         const chosenFlowerEmotionKey = recordData.emotion_type.name ? emotionToKeyMap[recordData.emotion_type.name] : key;
-  //         const chosenFlowerImageKey = recordData.chosen_flower.name ? recordData.chosen_flower.name : null;
-          
-  //         let flowerImageForModal = null;
-  //         if (IMAGES.flowers[chosenFlowerEmotionKey] && IMAGES.flowers[chosenFlowerEmotionKey][chosenFlowerImageKey]) {
-  //           flowerImageForModal = IMAGES.flowers[chosenFlowerEmotionKey][chosenFlowerImageKey];
-  //         } else {
-  //           console.warn(`모달용 꽃 이미지 못찾음: emotionKey=${chosenFlowerEmotionKey}, imageKey=${chosenFlowerImageKey}`);
-  //           // flowerImageForModal = IMAGES.flowers.UNKNOWN.default_flower; // Fallback
-  //         }
-          
-  //         let emotionIconForModal = IMAGES.emotionIcon[chosenFlowerEmotionKey] || null;
-
-  //         // 2. 결과 모달 띄우기
-  //         setResultModalMessage(diagnosisResult); // 이전 화면에서 전달된 메시지
-  //         setResultModalEmotionIcon(emotionIconForModal);
-  //         setResultModalImage(flowerImageForModal); // 백엔드가 알려준 꽃으로 모달 이미지 설정
-  //         setIsResultModalVisible(true);
-  //         setDiagnosisCompletedForToday(true); // 오늘 진단 완료 상태로 변경
-
-  //         await loadGardenData(true); // 정원 데이터 새로고침 (새 꽃, 나무 레벨 업데이트)
-
-  //       } catch (error) {
-  //         console.error("진단 결과 처리 또는 정원 갱신 중 오류:", error.response?.data || error.message);
-  //         Alert.alert("오류", "진단 결과를 처리하거나 정원을 업데이트하는 중 문제가 발생했습니다.");
-  //         // 오류 발생 시에도 정원은 한번 갱신 시도
-  //         await loadGardenData(true);
-  //       }
-  //     };
-
-  //     showResultAndRefreshGarden();
-  //   }
-  // }, [route.params, navigation, isLoadingGarden, loadGardenData]);
-
       const processDiagnosisResult = async (result, key, name, messages, diagDate) => {
         let flowerImageForModal = null;
         let emotionIconForModal = null;
@@ -625,11 +587,14 @@ const HomeScreen = ({ navigation, route }) => {
         {!isLoadingFlowers && showEmotionCheckButton && (
           <View style={styles.bottomAreaContent}>
             <View style={styles.buttonWrapper}>
-              <LinearGradient colors={['#4CAF50', '#8BC34A']} style={styles.gradientButton}>
-                <TouchableOpacity onPress={handleEmotionCheckPress} activeOpacity={0.7} style={styles.fullWidthTouchable}>
-                  <Text style={styles.buttonText}>감정 진단하기</Text>
-                </TouchableOpacity>
-              </LinearGradient>
+              {/* "감정 진단하기" 버튼 변경 */}
+              <TouchableOpacity 
+                onPress={handleEmotionCheckPress} 
+                activeOpacity={0.7} 
+                style={styles.mainActionButton} // 변경된 스타일 적용
+              >
+                <Text style={styles.mainActionButtonText}>감정 진단하기</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -644,16 +609,22 @@ const HomeScreen = ({ navigation, route }) => {
             <View style={styles.modalContent}>
               <Text style={styles.modalText}>감정 진단을 시작하시겠습니까?</Text>
               <View style={styles.modalButtons}>
-                <LinearGradient colors={['#4CAF50', '#8BC34A']} style={styles.modalButtonGradient}>
-                  <TouchableOpacity onPress={handleSimpleEmotionCheck} style={styles.modalButton} activeOpacity={0.7}>
-                    <Text style={styles.modalButtonText}>간단 진단</Text>
-                  </TouchableOpacity>
-                </LinearGradient>
-                <LinearGradient colors={['#4CAF50', '#8BC34A']} style={styles.modalButtonGradient}>
-                  <TouchableOpacity onPress={handleConfirmEmotionCheck} style={styles.modalButton} activeOpacity={0.7}>
-                    <Text style={styles.modalButtonText}>심층 진단</Text>
-                  </TouchableOpacity>
-                </LinearGradient>
+                {/* "간단 진단" 버튼 변경 */}
+                <TouchableOpacity 
+                  onPress={handleSimpleEmotionCheck} 
+                  style={styles.modalDialogButton} // 변경된 스타일 적용
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.modalDialogButtonText}>간단 진단</Text>
+                </TouchableOpacity>
+                {/* "심층 진단" 버튼 변경 */}
+                <TouchableOpacity 
+                  onPress={handleConfirmEmotionCheck} 
+                  style={styles.modalDialogButton} // 변경된 스타일 적용
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.modalDialogButtonText}>심층 진단</Text>
+                </TouchableOpacity>
               </View>
             </View>
           </TouchableOpacity>
@@ -760,18 +731,50 @@ const styles = StyleSheet.create({
   uiOverlayContainer: { position: 'absolute', left: 0, right: 0, bottom: 0, },
   bottomAreaContent: { paddingBottom: ESTIMATED_NAV_BAR_HEIGHT + 10, alignItems: 'center', justifyContent: 'flex-end', minHeight: ESTIMATED_NAV_BAR_HEIGHT + BUTTON_BOTTOM_FIXED_MARGIN + 50 },
   buttonWrapper: { marginBottom: BUTTON_BOTTOM_FIXED_MARGIN, alignItems: 'center', width: '80%', maxWidth: 300}, // 버튼 너비 제한
-  gradientButton: { borderRadius: 8, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 1.5, width: '100%'},
-  fullWidthTouchable: { paddingVertical: 12, paddingHorizontal: 25, alignItems: 'center', justifyContent: 'center'}, // TouchableOpacity가 Gradient 전체 차지
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold', textAlign: 'center', },
+
+  // "감정 진단하기" 버튼 스타일 (기존 gradientButton, fullWidthTouchable, buttonText 대체/수정)
+  mainActionButton: {
+    backgroundColor: '#2196F3', // flowerInfoButton과 동일한 배경색
+    paddingVertical: 10,       // flowerInfoButton과 유사한 세로 패딩
+    paddingHorizontal: 25,     // 가로 패딩은 기존 유지 또는 조정 가능
+    borderRadius: 8,           // flowerInfoButton과 동일한 모서리 둥글기
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',             // 부모 buttonWrapper의 너비를 따름
+    elevation: 0,              // 그림자 제거 (flowerInfoButton과 유사하게)
+    shadowOpacity: 0,          // 그림자 제거
+  },
+  mainActionButtonText: {      // 기존 buttonText와 거의 동일, 필요시 조정
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  
   navigationBarPlacement: { width: '100%', position: 'absolute', bottom: 0, },
   modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0, 0, 0, 0.6)' },
   modalContentContainer: { /* 스타일 불필요 또는 커스텀 */ },
   modalContent: { width: '80%', maxWidth: 350, padding: 25, backgroundColor: '#fff', borderRadius: 10, alignItems: 'center', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 },
   modalText: { fontSize: 18, marginBottom: 25, color: '#333', textAlign: 'center', fontWeight: '500' },
   modalButtons: { flexDirection: 'row', gap: 10, width: '100%' }, // gap 사용, 너비 100%
-  modalButtonGradient: { borderRadius: 8, flex:1 },
-  modalButton: { paddingVertical: 10, paddingHorizontal: 15, alignItems: 'center' },
-  modalButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  
+  // "간단 진단", "심층 진단" 버튼 스타일 (기존 modalButtonGradient, modalButton, modalButtonText 대체/수정)
+  modalDialogButton: {
+    backgroundColor: '#2196F3', // flowerInfoButton과 동일한 배경색
+    paddingVertical: 10,       // flowerInfoButton과 유사한 세로 패딩
+    paddingHorizontal: 15,     // 가로 패딩은 기존 modalButton 값 유지 또는 조정
+    borderRadius: 8,           // flowerInfoButton과 동일한 모서리 둥글기
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,                   // 부모 modalButtons 내에서 공간 균등 분배
+    elevation: 0,              // 그림자 제거 (flowerInfoButton과 유사하게)
+  },
+  modalDialogButtonText: {     // 기존 modalButtonText와 거의 동일
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+
   resultModalContentContainer: { /* 스타일 불필요 또는 커스텀 */ },
   resultModalContent: { width: '80%', maxWidth: 300, padding: 20, backgroundColor: 'white', borderRadius: 15, alignItems: 'center', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 },
   resultEmotionIcon: { width: 50, height: 50, marginBottom: 10, },
