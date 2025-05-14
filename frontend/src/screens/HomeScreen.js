@@ -450,7 +450,7 @@ const HomeScreen = ({ navigation, route }) => {
   const handleEmotionCheckPress = () => setIsModalVisible(true);
   const handleConfirmEmotionCheck = () => {
       setIsModalVisible(false);
-      Alert.alert("안내", "심층 진단 기능은 현재 준비 중입니다.");
+      handleNavigate(navigation, 'DeepDiagnosis');
   };
   const handleSimpleEmotionCheck = () => {
       setIsModalVisible(false);

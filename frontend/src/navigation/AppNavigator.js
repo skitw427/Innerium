@@ -1,7 +1,7 @@
 // src/navigation/AppNavigator.js
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'; // 정확한 import 확인
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
 // 화면 컴포넌트 import
 import HomeScreen from '../screens/HomeScreen';
@@ -9,20 +9,19 @@ import CalendarScreen from '../screens/CalendarScreen';
 import StorageScreen from '../screens/StorageScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import SimpleDiagnosisScreen from '../screens/SimpleDiagnosisScreen';
+import DeepDiagnosisScreen from '../screens/DeepDiagnosisScreen'; // DeepDiagnosisScreen import 추가
 
 const Stack = createStackNavigator();
-const Tab = createBottomTabNavigator(); // createBottomTabNavigator() 호출 확인
+const Tab = createBottomTabNavigator();
 
 const MainTabs = () => {
   return (
     <Tab.Navigator
-      // screenOptions에서 unmountOnBlur를 전역으로 설정하지 마세요.
-      // 각 스크린별로 설정하는 것이 더 명확합니다.
       screenOptions={{
         headerShown: false,
         tabBarStyle: { display: 'none' }, // 사용자 정의 네비게이션 바 사용
       }}
-      backBehavior="initialRoute" // 기본값은 'initialRoute' 또는 'history' (v6)
+      backBehavior="initialRoute"
     >
       <Tab.Screen
         name="Home"
@@ -35,9 +34,9 @@ const MainTabs = () => {
       <Tab.Screen
         name="Calendar"
         component={CalendarScreen}
-        options={{ // ★★★ options 객체 확인 ★★★
+        options={{
           title: '캘린더',
-          unmountOnBlur: true, // ★★★ 이 설정이 반드시 있어야 함 ★★★
+          unmountOnBlur: true,
         }}
       />
       <Tab.Screen
@@ -45,7 +44,7 @@ const MainTabs = () => {
         component={StorageScreen}
         options={{
           title: '보관함',
-          unmountOnBlur: true, // ★★★ 이 설정이 반드시 있어야 함 ★★★
+          unmountOnBlur: true,
         }}
       />
       <Tab.Screen
@@ -53,7 +52,7 @@ const MainTabs = () => {
         component={SettingsScreen}
         options={{
           title: '설정',
-          unmountOnBlur: true, // ★★★ 이 설정이 반드시 있어야 함 ★★★
+          unmountOnBlur: true,
         }}
       />
     </Tab.Navigator>
@@ -70,6 +69,11 @@ const AppNavigator = () => {
     >
       <Stack.Screen name="MainTabs" component={MainTabs} />
       <Stack.Screen name="SimpleDiagnosis" component={SimpleDiagnosisScreen} />
+      <Stack.Screen 
+        name="DeepDiagnosis" // DeepDiagnosisScreen을 위한 스크린 이름
+        component={DeepDiagnosisScreen} 
+        // options={{ title: '심층 마음 진단' }} // 필요하다면 헤더 타이틀 설정 (현재 headerShown: false이므로 영향 없음)
+      />
     </Stack.Navigator>
   );
 };
