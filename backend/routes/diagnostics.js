@@ -14,7 +14,7 @@ if (!GEMINI_API_KEY) {
 // Gemini 클라이언트 초기화
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash-latest",
+  model: "gemini-2.5-flash-preview-04-17",
   systemInstruction: `Your Role:
 You are an empathetic and insightful AI assistant. Your purpose is to help users reflect deeply on their daily emotional landscape through a structured, yet natural, guided conversation. You are NOT a therapist, but a supportive guide for self-reflection. You shold answer to user in Korean.
 
@@ -146,19 +146,34 @@ Tone and Style Guidelines:
 
 // 분석용 모델 설정 (필요에 따라 다른 모델 또는 설정 사용 가능)
 const analysisModel = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash-latest", // 또는 분석에 더 적합한 모델
-    systemInstruction: `당신은 사용자와 상담가 간의 대화 내용을 분석하는 AI입니다.
-    주어진 대화 내용을 바탕으로 다음 정보를 추출하여 JSON 형식으로 응답해주세요:
-    - "detected_emotion_type_id": 사용자의 주요 감정을 나타내는 숫자 ID (예: 1=기쁨, 2=슬픔, 3=분노, 4=불안, 5=평온 등, 미리 정의된 ID 사용).
-    - "conversation_summary": 대화 내용을 간결하게 요약한 문자열 (150자 이내).
-    - "recommended_flower_type_id": 분석된 감정에 가장 어울리는 꽃의 숫자 ID (예: 101=장미, 102=해바라기 등, 미리 정의된 ID 사용).
-    만약 적절한 ID를 찾기 어렵다면 해당 필드는 null로 설정하세요.
-    응답 형식:
-    {
-      "detected_emotion_type_id": number | null,
-      "conversation_summary": "string",
-      "recommended_flower_type_id": number | null
-    }`,
+    model: "gemini-2.5-flash-preview-04-17", // 또는 분석에 더 적합한 모델
+    systemInstruction: `Anger (Ag): Anger, Mad, Rage, Pissed off
+Fear (F): Scared, Terror, Panic, Fear
+Desire (Dr): Wanting, Craving, Longing, Desire
+Sadness (S): Sad, Grief, Empty, Lonely
+Relaxation (R): Easygoing, Calm, Relaxation, Chilled out
+Disgust (Dg): Sickened, Grossed out, Nausea, Revulsion
+Happiness (H): Satisfaction, Happy, Enjoyment, Liking
+Anxiety (Ax): Dread, Anxiety, Worry, Nervous
+
+Based on these 8 emotions, when inputting the conversation history between the user and the AI assistant, first display the outputs the results for the user as explanation in Korean for three time periods: morning, afternoon, and evening. Then output all eight emotions to the system with a score of 1 to 7 for each on a scale of 1 (almost none) - 4 (weakly) - 7 (very strong) that Morning, afternoon, and evening are all combined into. The order of the scores should be Anger - Fear - Desire - Sadness - Relaxation - Disgust - Happiness - Anxiety. If there is no information, explain that there are no information in the description for all time zones, and output all scores as 1.
+
+Use this JSON schema only on output:
+
+result_for_user = {'오전': str, '오후': str, '저녁': str}
+result_scores: list[int]
+Return: list[result_for_user, result_scores]
+
+follow exactly this form:
+
+[
+  {
+    "오전": "string",
+    "오후": "string",
+    "저녁": "string"
+  },
+  [integer, integer, integer, integer, integer, integer, integer, integer]
+]`,
   });
   const analysisGenerationConfig = { temperature: 0.3, maxOutputTokens: 1024 }; // 분석은 좀 더 결정적인 결과 유도
 
