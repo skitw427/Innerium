@@ -4,29 +4,40 @@
     "slug": "frontend",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/icon.png", // 앱 아이콘
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": true, // New Architecture 사용 여부 (Expo SDK 46 이상)
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash-icon.png", // 스플래시 화면 이미지
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.frontend" // iOS 번들 ID (실제 값으로 변경 필요)
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/adaptive-icon.png", // Android 적응형 아이콘 전경
         "backgroundColor": "#ffffff"
       },
-      "softwareKeyboardLayoutMode": "resize" // 이 부분이 추가되었습니다.
+      "softwareKeyboardLayoutMode": "resize",
+      "useNextNotificationsApi": true, // 최신 알림 API 사용 (권장)
+      "package": "com.yourcompany.frontend" // Android 패키지 이름 (실제 값으로 변경 필요)
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store"
+      "expo-secure-store", // 기존 플러그인
+      [
+        "expo-notifications", // 알림 플러그인 추가
+        {
+          "icon": "./assets/notification-icon.png", // 알림용 아이콘 (Android)
+          "color": "#FFFFFF" // 알림 아이콘 배경색 (Android, 보통 앱 테마색이나 흰색 사용)
+          // "sounds": ["./assets/sounds/notification.wav"] // 커스텀 알림 소리 (선택 사항)
+        }
+      ]
     ]
   }
 }
