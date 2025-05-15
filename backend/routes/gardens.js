@@ -95,6 +95,7 @@ router.get('/current', authMiddleware, async (req, res, next) => {
           flower_instance_id: record.record_id.toString(),
           flower_type: flowerTypeData ? { // 수정된 부분
             id: flowerTypeData.id,
+            name: flowerTypeData.name,
             image_url: flowerTypeData.image_url,
           } : { id: null, image_url: null }, // flowerTypeData가 null일 경우의 처리
           position: {
