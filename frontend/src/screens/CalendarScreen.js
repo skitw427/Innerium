@@ -25,7 +25,7 @@ LocaleConfig.locales['ko'] = {
 };
 LocaleConfig.defaultLocale = 'ko';
 
-const ESTIMATED_NAV_BAR_HEIGHT = 110;
+const ESTIMATED_NAV_BAR_HEIGHT = 110; // 네비게이션 바의 실제 높이와 패딩을 고려한 값
 const TOP_PADDING = 60;
 const MARGIN_RATIO_5_WEEKS = 0.11;
 const MARGIN_RATIO_6_WEEKS = 0.08;
@@ -80,8 +80,11 @@ const CustomDayComponent = React.memo(({ date, state, marking, onPress, onLongPr
   const emotionIconSource = emotionKeyForDay && IMAGES.emotionIcon && IMAGES.emotionIcon[emotionKeyForDay]
     ? IMAGES.emotionIcon[emotionKeyForDay]
     : null;
+  
   const validPadding = typeof dayPaddingBottom === 'number' && !isNaN(dayPaddingBottom) ? dayPaddingBottom : MIN_MARGIN;
-  const calculatedIconSize = Math.max(10, validPadding * 0.4);
+  const calculatedIconSize = Math.max(10, validPadding * 0.4); 
+  const iconBottomPosition = Math.max(0, (validPadding - calculatedIconSize) / 2);
+
   let textStyle = [ styles.dayText, isDisabled && styles.disabledText, isAppToday && styles.todayText, ];
   if (marking?.customStyles?.text) { textStyle.push(marking.customStyles.text); }
   let wrapperStyle = [ styles.dayWrapper, { paddingBottom: validPadding }, ];
@@ -90,7 +93,7 @@ const CustomDayComponent = React.memo(({ date, state, marking, onPress, onLongPr
     <TouchableOpacity
       style={wrapperStyle}
       onPress={() => !isDisabled && onPress(date)}
-      onLongPress={() => !isDisabled && onLongPress && onLongPress(date)} // onLongPress prop 확인
+      onLongPress={() => !isDisabled && onLongPress && onLongPress(date)}
       activeOpacity={isDisabled || !emotionIconSource ? 1 : 0.7}
       disabled={isDisabled}
     >
@@ -100,7 +103,11 @@ const CustomDayComponent = React.memo(({ date, state, marking, onPress, onLongPr
           source={emotionIconSource}
           style={[
             styles.emotionIcon,
-            { width: calculatedIconSize, height: calculatedIconSize, bottom: validPadding * 0.4, }
+            { 
+              width: calculatedIconSize, 
+              height: calculatedIconSize, 
+              bottom: iconBottomPosition,
+            }
           ]}
           resizeMode="contain"
         />
@@ -169,12 +176,12 @@ const CalendarScreen = ({ navigation }) => {
          if (Array.isArray(serverRecords)) {
              serverRecords.forEach(record => {
                  const dateStr = record.record_date;
-                 const emotionKeyFromServer = record.emotion_type.name; // API가 제공하는 키 (실제 필드명 확인)
+                 const emotionKeyFromServer = record.emotion_type.name;
                  if (!newMarkedDates[dateStr] && emotionKeyFromServer) {
                      newMarkedDates[dateStr] = {
                          emotionKey: emotionKeyFromServer,
                          emotionName: record.emotionName || keyToEmotionNameMap[emotionKeyFromServer] || '정보 없음',
-                         messages: record.messages || [], // API가 메시지 제공하면 사용
+                         messages: record.messages || [],
                          creationDate: record.creationDate || dateStr,
                      };
                  } else if (newMarkedDates[dateStr] && emotionKeyFromServer && !newMarkedDates[dateStr].emotionKey) {
@@ -235,13 +242,12 @@ const CalendarScreen = ({ navigation }) => {
                      for (const record of serverRecords) {
                          const detailKey = `${EMOTION_LOG_PREFIX}${record.record_date}`;
                          const existingDetail = await AsyncStorage.getItem(detailKey);
-                         // API가 제공하는 데이터 (messages, emotionName 등 실제 필드명 확인 필요)
-                         const apiEmotionKey = record.emotion_type?.name; // emotion_type이 객체일 수 있음
+                         const apiEmotionKey = record.emotion_type?.name;
                          const apiEmotionName = record.emotionName || (apiEmotionKey ? keyToEmotionNameMap[apiEmotionKey] : null) || '정보 없음';
                          const apiMessages = record.messages || []; 
                          const apiCreationDate = record.creationDate || record.record_date;
 
-                         if (!existingDetail && apiEmotionKey) { // AsyncStorage에 없고, API에 키가 있을 때만
+                         if (!existingDetail && apiEmotionKey) {
                              recordsToStoreFromAPI.push([
                                  detailKey,
                                  JSON.stringify({
@@ -500,14 +506,23 @@ const CalendarScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#eef7ff' },
   outerContainer: { flex: 1, justifyContent: 'space-between' },
-  mainContentContainer: { flex: 1, width: '100%' },
+  mainContentContainer: { // 캘린더를 포함하는 메인 컨텐츠 영역
+    flex: 1, 
+    width: '100%',
+    position: 'relative', // zIndex를 사용하기 위해 추가
+    zIndex: 1,           // 네비게이션 바보다 위에 있도록 설정
+  },
   calendarPositioningContainer: { width: '100%', paddingTop: TOP_PADDING },
-  navigationBarPlacement: { width: '100%' },
+  navigationBarPlacement: { // 네비게이션 바를 감싸는 영역
+    width: '100%',
+    position: 'relative', // zIndex 사용 또는 자식 컴포넌트의 쌓임 컨텍스트를 위해
+    zIndex: 0,           // mainContentContainer보다 아래에 있도록 설정 (기본값이므로 명시적 0은 선택사항)
+  },
   dayWrapper: { alignItems: 'center', justifyContent: 'flex-start', paddingTop: (DAY_CELL_BASE_HEIGHT - DAY_TEXT_FONT_SIZE) / 2, },
   dayText: { fontSize: DAY_TEXT_FONT_SIZE, color: '#2d4150', },
   todayText: { color: TODAY_TEXT_COLOR, fontWeight: 'bold', },
   disabledText: { color: '#d9e1e8' },
-  emotionIcon: { position: 'absolute', alignSelf: 'center', zIndex: 10, },
+  emotionIcon: { position: 'absolute', alignSelf: 'center', zIndex: 10, }, // 셀 내부에서 텍스트보다 위에 오도록 zIndex 유지
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#eef7ff' },
   loadingText: { marginTop: 10, fontSize: 16, color: '#4a90e2' },
   modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0, 0, 0, 0.6)' },

@@ -38,7 +38,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-evenly',
     width: '100%',
-    paddingVertical: 30,
+    paddingTop: 10,
+    paddingBottom: 30,
     position: 'relative', // 필요에 따라 'absolute' 등으로 변경 가능
     // backgroundColor: '#f0f0f0', // 배경색 등 추가 스타일 가능
   },
