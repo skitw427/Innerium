@@ -25,7 +25,7 @@ LocaleConfig.locales['ko'] = {
 };
 LocaleConfig.defaultLocale = 'ko';
 
-const ESTIMATED_NAV_BAR_HEIGHT = 130; // 네비게이션 바의 실제 높이와 패딩을 고려한 값
+const ESTIMATED_NAV_BAR_HEIGHT = 100; // 네비게이션 바의 실제 높이와 패딩을 고려한 값
 const TOP_PADDING = 60;
 const MARGIN_RATIO_5_WEEKS = 0.11;
 const MARGIN_RATIO_6_WEEKS = 0.08;
