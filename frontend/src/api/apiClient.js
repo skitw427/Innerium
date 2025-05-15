@@ -294,6 +294,7 @@ export const saveCurrentGarden = (gardenData) => {
  *            Content-Type: multipart/form-data (FormData 사용 시 Axios가 자동 설정)
  * 요청 본문(FormData):
  *   - name: string (사용자가 정한 정원 이름)
+ *   - completedDate: string
  *   - snapshot_image: File (스냅샷 이미지 파일, 선택적)
  * 성공 응답 본문(CompleteGardenResDTO): {
  *   garden_id: string,
@@ -302,16 +303,11 @@ export const saveCurrentGarden = (gardenData) => {
  *   snapshot_image_url: string
  * }
  * @param {string} gardenId - 완성 처리할 정원의 ID (경로 파라미터)
- * @param {FormData} formData - 이름과 스냅샷 이미지 파일(선택적)을 포함하는 FormData 객체
+ * // param {FormData} formData - 이름과 스냅샷 이미지 파일(선택적)을 포함하는 FormData 객체
  * @returns {Promise<import("axios").AxiosResponse<CompleteGardenResDTO>>} CompleteGardenResDTO 포함 응답
  */
-export const completeGarden = (gardenId, formData) => {
-  return apiClient.post(`/gardens/${gardenId}/complete`, formData);
-  // return apiClient.post(`/gardens/${gardenId}/complete`, formData, {
-  //   headers: {
-  //     'Content-Type': 'multipart/form-data',
-  //   },
-  // });
+export const completeGarden = (gardenId, completedGardenData) => {
+  return apiClient.post(`/gardens/${gardenId}/complete`, completedGardenData);
 };
 
 // --- 기존 정원 API 함수들 (주석은 원래 제공된 상세한 내용 유지) ---

@@ -15,6 +15,7 @@ import useScreenTransition from '../hooks/useScreenTransition';
 import IMAGES from '../constants/images';
 import { getAppCurrentDate, formatDateToYYYYMMDD } from '../utils/dateUtils';
 import { useAuth } from '../context/AuthContext';
+import { useGarden } from '../context/GardenContext';
 
 // --- 상수 정의 ---
 const TREE_IMAGE_SCALE_BASE = 0.3; const TREE_IMAGE_SCALE_2 = 0.4;
@@ -54,6 +55,17 @@ const GENERIC_ALERT_POPUP_HEIGHT_RATIO = 0.35;
 
 
 const HomeScreen = ({ navigation, route }) => {
+  const {
+      currentGardenDetails,
+      placedFlowers, // GardenContext에서 오는 꽃 목록
+      setPlacedFlowers,
+      isLoadingGarden,    // GardenContext의 초기 정원 로딩 상태
+      isCompletingGarden, // GardenContext의 정원 완성 API 호출 중 로딩 상태
+      gardenError,
+      refreshCurrentGarden,
+      completeGarden,
+    } = useGarden();
+
   const { isTransitioning, handleNavigate } = useScreenTransition();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const { isNewAccountJustCreated, clearNewAccountFlag } = useAuth();
@@ -62,12 +74,13 @@ const HomeScreen = ({ navigation, route }) => {
   const [resultModalMessage, setResultModalMessage] = useState('');
   const [resultModalImage, setResultModalImage] = useState(null);
   const [resultModalEmotionIcon, setResultModalEmotionIcon] = useState(null);
-  const [placedFlowers, setPlacedFlowers] = useState(null);
-  const [isLoadingFlowers, setIsLoadingFlowers] = useState(true);
+  // const [placedFlowers, setPlacedFlowers] = useState(null);
+  const [isLoadingFlowers, setIsLoadingFlowers] = useState(false);
   const [currentTreeImageSource, setCurrentTreeImageSource] = useState(IMAGES.treeImage);
   const [currentTreeImageScalingFactor, setCurrentTreeImageScalingFactor] = useState(TREE_IMAGE_SCALE_BASE);
   const [showEmotionCheckButton, setShowEmotionCheckButton] = useState(true);
-  const [isGardenFull, setIsGardenFull] = useState(false);
+  // const [isGardenFull, setIsGardenFull] = useState(false);
+  const [isGardenFull, setIsGardenFull] = useState(placedFlowers.length >= MAX_FLOWERS);
   const gardenViewRef = useRef();
   const [currentGardenSnapshotTaken, setCurrentGardenSnapshotTaken] = useState(false);
   const [isFlowerInfoModalVisible, setIsFlowerInfoModalVisible] = useState(false);
@@ -80,6 +93,7 @@ const HomeScreen = ({ navigation, route }) => {
   const [gardenCompleteAlertMessage, setGardenCompleteAlertMessage] = useState("정원 완성! 현재 정원의 모습이 보관함에 저장되었습니다.");
   const [isGardenResetAlertVisible, setIsGardenResetAlertVisible] = useState(false);
   const [gardenResetAlertMessage, setGardenResetAlertMessage] = useState("새로운 정원을 가꿀 시간입니다!");
+  const [isProcessingDiagnosis, setIsProcessingDiagnosis] = useState(false);
 
 
   const topSpacerHeight = windowHeight * TOP_SPACER_RATIO;
@@ -112,69 +126,95 @@ const HomeScreen = ({ navigation, route }) => {
     }
   }, [isNewAccountJustCreated, clearNewAccountFlag]);
 
-  useEffect(() => {
-    const loadInitialState = async () => {
-      setIsLoadingFlowers(true);
-      try {
-        const snapshotTakenValuePromise = AsyncStorage.getItem(CURRENT_GARDEN_SNAPSHOT_TAKEN_KEY);
-        const savedFlowersStringPromise = AsyncStorage.getItem(PLACED_FLOWERS_KEY);
-        const [snapshotTakenValue, savedFlowersString] = await Promise.all([snapshotTakenValuePromise, savedFlowersStringPromise]);
-        const isSnapshotTaken = snapshotTakenValue === 'true';
-        setCurrentGardenSnapshotTaken(isSnapshotTaken);
-        let loadedFlowers = [];
-        if (savedFlowersString !== null) {
-          try {
-            const parsedFlowers = JSON.parse(savedFlowersString);
-            if (Array.isArray(parsedFlowers)) {
-              loadedFlowers = parsedFlowers.length > MAX_FLOWERS && MAX_FLOWERS > 0 ? parsedFlowers.slice(0, MAX_FLOWERS) : parsedFlowers;
-            } else { await AsyncStorage.removeItem(PLACED_FLOWERS_KEY); }
-          } catch (parseError) { await AsyncStorage.removeItem(PLACED_FLOWERS_KEY); }
-        } else { if (isSnapshotTaken) { await AsyncStorage.setItem(CURRENT_GARDEN_SNAPSHOT_TAKEN_KEY, 'false'); setCurrentGardenSnapshotTaken(false); } }
-        setPlacedFlowers(loadedFlowers);
-        setIsGardenFull(loadedFlowers.length >= MAX_FLOWERS);
-      } catch (error) { setPlacedFlowers([]); setIsGardenFull(false); setCurrentGardenSnapshotTaken(false); } finally { setIsLoadingFlowers(false); }
-    };
-    loadInitialState();
-  }, []);
+  // useEffect(() => {
+  //   const loadInitialState = async () => {
+  //     setIsLoadingFlowers(true);
+  //     try {
+  //       const snapshotTakenValuePromise = AsyncStorage.getItem(CURRENT_GARDEN_SNAPSHOT_TAKEN_KEY);
+  //       const savedFlowersStringPromise = AsyncStorage.getItem(PLACED_FLOWERS_KEY);
+  //       const [snapshotTakenValue, savedFlowersString] = await Promise.all([snapshotTakenValuePromise, savedFlowersStringPromise]);
+  //       const isSnapshotTaken = snapshotTakenValue === 'true';
+  //       setCurrentGardenSnapshotTaken(isSnapshotTaken);
+  //       let loadedFlowers = [];
+  //       if (savedFlowersString !== null) {
+  //         try {
+  //           const parsedFlowers = JSON.parse(savedFlowersString);
+  //           if (Array.isArray(parsedFlowers)) {
+  //             loadedFlowers = parsedFlowers.length > MAX_FLOWERS && MAX_FLOWERS > 0 ? parsedFlowers.slice(0, MAX_FLOWERS) : parsedFlowers;
+  //           } else { await AsyncStorage.removeItem(PLACED_FLOWERS_KEY); }
+  //         } catch (parseError) { await AsyncStorage.removeItem(PLACED_FLOWERS_KEY); }
+  //       } else { if (isSnapshotTaken) { await AsyncStorage.setItem(CURRENT_GARDEN_SNAPSHOT_TAKEN_KEY, 'false'); setCurrentGardenSnapshotTaken(false); } }
+  //       setPlacedFlowers(loadedFlowers);
+  //       setIsGardenFull(loadedFlowers.length >= MAX_FLOWERS);
+  //     } catch (error) { setPlacedFlowers([]); setIsGardenFull(false); setCurrentGardenSnapshotTaken(false); } finally { setIsLoadingFlowers(false); }
+  //   };
+  //   loadInitialState();
+  // }, []);
+
+  // useEffect(() => {
+  //   if (isLoadingFlowers || placedFlowers === null) return;
+  //   const savePlacedFlowers = async () => {
+  //     try {
+  //       if (Array.isArray(placedFlowers)) {
+  //         if (placedFlowers.length > 0) { await AsyncStorage.setItem(PLACED_FLOWERS_KEY, JSON.stringify(placedFlowers)); }
+  //         else { await AsyncStorage.removeItem(PLACED_FLOWERS_KEY); const flag = await AsyncStorage.getItem(CURRENT_GARDEN_SNAPSHOT_TAKEN_KEY); if (flag === 'true') { await AsyncStorage.setItem(CURRENT_GARDEN_SNAPSHOT_TAKEN_KEY, 'false'); setCurrentGardenSnapshotTaken(false); } }
+  //       }
+  //     } catch (error) { console.error('[HomeScreen] Failed to save flowers:', error); }
+  //   };
+  //   savePlacedFlowers();
+  //   if (Array.isArray(placedFlowers)) { const full = placedFlowers.length >= MAX_FLOWERS; if (isGardenFull !== full) setIsGardenFull(full); }
+  // }, [placedFlowers, isLoadingFlowers, isGardenFull]);
+
+  // const captureAndSaveGarden = useCallback(async () => {
+  //   if (!gardenViewRef.current) { console.warn("[HomeScreen] gardenViewRef NA."); return; }
+  //   try {
+  //     const base64Data = await gardenViewRef.current.capture({ format: "jpg", quality: 0.8, result: "base64" });
+  //     const completedGardensString = await AsyncStorage.getItem(COMPLETED_GARDENS_KEY);
+  //     const completedGardens = completedGardensString ? JSON.parse(completedGardensString) : [];
+  //     completedGardens.push({ timestamp: Date.now(), snapshotData: `data:image/jpeg;base64,${base64Data}` });
+  //     await AsyncStorage.setItem(COMPLETED_GARDENS_KEY, JSON.stringify(completedGardens));
+  //     await AsyncStorage.setItem(CURRENT_GARDEN_SNAPSHOT_TAKEN_KEY, 'true');
+  //     setCurrentGardenSnapshotTaken(true);
+  
+  //     if (isResultModalVisible) {
+  //       setPendingGardenCompletionAlert(true);
+  //     } else {
+  //       setIsGardenCompleteAlertVisible(true);
+  //     }
+  //   } catch (error) { console.error("[HomeScreen] Failed to capture/save garden:", error); Alert.alert("오류", "정원 이미지 저장 실패."); }
+  // }, [isResultModalVisible]);
+
+
+  // useEffect(() => {
+  //   if (isGardenFull && !currentGardenSnapshotTaken && !isLoadingFlowers) {
+  //     const timer = setTimeout(() => captureAndSaveGarden(), 500);
+  //     return () => clearTimeout(timer);
+  //   }
+  // }, [isGardenFull, currentGardenSnapshotTaken, isLoadingFlowers, captureAndSaveGarden]);
 
   useEffect(() => {
-    if (isLoadingFlowers || placedFlowers === null) return;
-    const savePlacedFlowers = async () => {
-      try {
-        if (Array.isArray(placedFlowers)) {
-          if (placedFlowers.length > 0) { await AsyncStorage.setItem(PLACED_FLOWERS_KEY, JSON.stringify(placedFlowers)); }
-          else { await AsyncStorage.removeItem(PLACED_FLOWERS_KEY); const flag = await AsyncStorage.getItem(CURRENT_GARDEN_SNAPSHOT_TAKEN_KEY); if (flag === 'true') { await AsyncStorage.setItem(CURRENT_GARDEN_SNAPSHOT_TAKEN_KEY, 'false'); setCurrentGardenSnapshotTaken(false); } }
+      const handleCompleteGarden = async () => {
+      if (isGardenFull) {
+        try {
+          console.log('[HomeScreen] Garden is complete, saving garden data to server...');
+          await completeGarden(); // 서버 데이터 새로고침 (꽃 심기는 서버에서 처리됨)
+          console.log('[HomeScreen] Garden data saved to server.');
+
+          setResultModalMessage(diagnosisResult);
+          setResultModalImage(flowerImgModal);
+          setResultModalEmotionIcon(emotionIconModal);
+          setIsResultModalVisible(true);
+        } catch (error) {
+          console.error('[HomeScreen] Error saving the completed garden:', error);
+          Alert.alert("오류", gardenError || "정원 완성을 처리하는 중 문제가 발생했습니다.");
         }
-      } catch (error) { console.error('[HomeScreen] Failed to save flowers:', error); }
-    };
-    savePlacedFlowers();
-    if (Array.isArray(placedFlowers)) { const full = placedFlowers.length >= MAX_FLOWERS; if (isGardenFull !== full) setIsGardenFull(full); }
-  }, [placedFlowers, isLoadingFlowers, isGardenFull]);
-
-  const captureAndSaveGarden = useCallback(async () => {
-    if (!gardenViewRef.current) { console.warn("[HomeScreen] gardenViewRef NA."); return; }
-    try {
-      const base64Data = await gardenViewRef.current.capture({ format: "jpg", quality: 0.8, result: "base64" });
-      const completedGardensString = await AsyncStorage.getItem(COMPLETED_GARDENS_KEY);
-      const completedGardens = completedGardensString ? JSON.parse(completedGardensString) : [];
-      completedGardens.push({ timestamp: Date.now(), snapshotData: `data:image/jpeg;base64,${base64Data}` });
-      await AsyncStorage.setItem(COMPLETED_GARDENS_KEY, JSON.stringify(completedGardens));
-      await AsyncStorage.setItem(CURRENT_GARDEN_SNAPSHOT_TAKEN_KEY, 'true');
-      setCurrentGardenSnapshotTaken(true);
-      if (isResultModalVisible) {
-        setPendingGardenCompletionAlert(true);
-      } else {
-        setIsGardenCompleteAlertVisible(true);
       }
-    } catch (error) { console.error("[HomeScreen] Failed to capture/save garden:", error); Alert.alert("오류", "정원 이미지 저장 실패."); }
-  }, [isResultModalVisible]);
-
-  useEffect(() => {
-    if (isGardenFull && !currentGardenSnapshotTaken && !isLoadingFlowers) {
-      const timer = setTimeout(() => captureAndSaveGarden(), 500);
-      return () => clearTimeout(timer);
     }
-  }, [isGardenFull, currentGardenSnapshotTaken, isLoadingFlowers, captureAndSaveGarden]);
+
+    if (!isLoadingGarden && !isCompletingGarden && !isProcessingDiagnosis && !isResultModalVisible) {
+      handleCompleteGarden();
+    }
+  }, [isGardenFull, isResultModalVisible, isLoadingGarden, isProcessingDiagnosis]);
 
   useEffect(() => {
     if (!isResultModalVisible && pendingGardenCompletionAlert) {
@@ -235,50 +275,95 @@ const HomeScreen = ({ navigation, route }) => {
 
   // 진단 결과 처리
   useEffect(() => {
-    if (route.params?.diagnosisResult && route.params?.emotionKey && !isLoadingFlowers && Array.isArray(placedFlowers)) {
-      const { diagnosisResult, emotionKey, primaryEmotionName, diagnosisMessages } = route.params;
-      if (navigation?.setParams) navigation.setParams({ diagnosisResult: undefined, emotionKey: undefined, primaryEmotionName: undefined, diagnosisMessages: undefined, diagnosisDate: undefined });
-      
-      const processResult = async (result, key, name, messages) => {
-        let flowerImgModal = null, emotionIconModal = null, plantNew = false, newFlowerData = null;
-        if (key && IMAGES.emotionIcon?.[key]) emotionIconModal = IMAGES.emotionIcon[key];
-        if (key && IMAGES.flowers?.[key]) {
-          const allImgs = IMAGES.flowers[key], allImgKeys = Object.keys(allImgs);
-          if (allImgKeys.length > 0) {
-            const placedKeys = placedFlowers.filter(f => f.emotionKey === key).map(f => f.imageKey);
-            const availableKeys = allImgKeys.filter(k => !placedKeys.includes(k));
-            if (availableKeys.length > 0) {
-              const imgKeyPlant = availableKeys[Math.floor(Math.random() * availableKeys.length)];
-              flowerImgModal = allImgs[imgKeyPlant]; plantNew = true;
-              const date = formatDateToYYYYMMDD(await getAppCurrentDate());
-              newFlowerData = { id: `${Date.now()}-${key}-${imgKeyPlant}`, source: flowerImgModal, emotionKey: key, imageKey: imgKeyPlant, emotionName: name || keyToEmotionNameMap[key] || '정보 없음', messages: messages || [], creationDate: date, relativePos: null };
-            } else { if (placedKeys.length > 0) flowerImgModal = allImgs[placedKeys[Math.floor(Math.random() * placedKeys.length)]]; else flowerImgModal = allImgs[allImgKeys[0]]; plantNew = false; }
-          } else plantNew = false;
-        }
-        if (plantNew && newFlowerData && flowerCanvasHeight > 0) {
-          setPlacedFlowers(prev => {
-            if (!Array.isArray(prev)) return prev;
-            if (prev.length < MAX_FLOWERS) {
-              let updated = [...prev], selPos = null;
-              const occupied = new Set(prev.map(f => f.relativePos ? JSON.stringify(f.relativePos) : null).filter(p => p));
-              const availableSlots = RELATIVE_FLOWER_POSITIONS.filter(pos => !occupied.has(JSON.stringify(pos)));
-              selPos = availableSlots.length > 0 ? availableSlots[Math.floor(Math.random() * availableSlots.length)] : RELATIVE_FLOWER_POSITIONS[Math.floor(Math.random() * RELATIVE_FLOWER_POSITIONS.length)];
-              newFlowerData.relativePos = selPos; updated.push(newFlowerData); return updated;
-            } else {
-              Alert.alert("알림", "정원이 가득 차서 기존 꽃과 교체합니다.");
-              let updated = [...prev]; const idx = Math.floor(Math.random() * prev.length);
-              newFlowerData.relativePos = prev[idx].relativePos; updated.splice(idx, 1, newFlowerData); return updated;
-            }
-          });
-        }
-        setResultModalMessage(result); setResultModalImage(flowerImgModal); setResultModalEmotionIcon(emotionIconModal); setIsResultModalVisible(true);
-      };
-      processResult(diagnosisResult, emotionKey, primaryEmotionName, diagnosisMessages);
-    } else if (route.params?.diagnosisResult && isLoadingFlowers && navigation?.setParams) {
-      navigation.setParams({ diagnosisResult: undefined, emotionKey: undefined, primaryEmotionName: undefined, diagnosisMessages: undefined });
-    }
-  }, [route.params, navigation, flowerCanvasHeight, placedFlowers, isLoadingFlowers, getAppCurrentDate, formatDateToYYYYMMDD]);
+    const handleDiagnosisParams = async () => {
+      if (route.params?.diagnosisResult && route.params?.emotionKey) {
+        setIsProcessingDiagnosis(true);
+        const { diagnosisResult, emotionKey } = route.params;
 
+        if (navigation?.setParams) {
+          navigation.setParams({ diagnosisResult: undefined, emotionKey: undefined, primaryEmotionName: undefined, diagnosisMessages: undefined });
+        }
+
+        try {
+          console.log('[HomeScreen] Diagnosis complete, refreshing garden data from server...');
+          await refreshCurrentGarden(); // 서버 데이터 새로고침 (꽃 심기는 서버에서 처리됨)
+          console.log('[HomeScreen] Garden data refreshed after diagnosis.');
+
+          // 모달 표시는 그대로 유지 (대표 이미지 사용)
+          let flowerImgModal = null;
+          let emotionIconModal = null;
+          if (emotionKey && IMAGES.emotionIcon?.[emotionKey]) emotionIconModal = IMAGES.emotionIcon[emotionKey];
+          if (emotionKey && IMAGES.flowers?.[emotionKey]) {
+            const allImgs = IMAGES.flowers[emotionKey];
+            const allImgKeys = Object.keys(allImgs);
+            if (allImgKeys.length > 0) {
+              flowerImgModal = allImgs[allImgKeys[Math.floor(Math.random() * allImgKeys.length)]];
+            }
+          }
+          setResultModalMessage(diagnosisResult);
+          setResultModalImage(flowerImgModal);
+          setResultModalEmotionIcon(emotionIconModal);
+          setIsResultModalVisible(true);
+        } catch (error) {
+          console.error('[HomeScreen] Error processing diagnosis result or refreshing garden:', error);
+          Alert.alert("오류", gardenError || "진단 결과를 처리하는 중 문제가 발생했습니다.");
+        } finally {
+          setIsProcessingDiagnosis(false);
+        }
+      }
+    };
+
+    // 초기 로딩이나 다른 처리 중이 아닐 때만 실행
+    if (!isLoadingGarden && !isCompletingGarden && !isProcessingDiagnosis && route.params?.diagnosisResult) {
+      handleDiagnosisParams();
+    }
+  }, [route.params, navigation, refreshCurrentGarden, isLoadingGarden, isCompletingGarden, isProcessingDiagnosis, gardenError]);
+
+  // useEffect(() => {
+  //   if (route.params?.diagnosisResult && route.params?.emotionKey && !isLoadingFlowers && Array.isArray(placedFlowers)) {
+  //     const { diagnosisResult, emotionKey, primaryEmotionName, diagnosisMessages } = route.params;
+  //     if (navigation?.setParams) navigation.setParams({ diagnosisResult: undefined, emotionKey: undefined, primaryEmotionName: undefined, diagnosisMessages: undefined, diagnosisDate: undefined });
+      
+  //     const processResult = async (result, key, name, messages) => {
+  //       let flowerImgModal = null, emotionIconModal = null, plantNew = false, newFlowerData = null;
+  //       if (key && IMAGES.emotionIcon?.[key]) emotionIconModal = IMAGES.emotionIcon[key];
+  //       if (key && IMAGES.flowers?.[key]) {
+  //         const allImgs = IMAGES.flowers[key], allImgKeys = Object.keys(allImgs);
+  //         if (allImgKeys.length > 0) {
+  //           const placedKeys = placedFlowers.filter(f => f.emotionKey === key).map(f => f.imageKey);
+  //           const availableKeys = allImgKeys.filter(k => !placedKeys.includes(k));
+  //           if (availableKeys.length > 0) {
+  //             const imgKeyPlant = availableKeys[Math.floor(Math.random() * availableKeys.length)];
+  //             flowerImgModal = allImgs[imgKeyPlant]; plantNew = true;
+  //             const date = formatDateToYYYYMMDD(await getAppCurrentDate());
+  //             newFlowerData = { id: `${Date.now()}-${key}-${imgKeyPlant}`, source: flowerImgModal, emotionKey: key, imageKey: imgKeyPlant, emotionName: name || keyToEmotionNameMap[key] || '정보 없음', messages: messages || [], creationDate: date, relativePos: null };
+  //           } else { if (placedKeys.length > 0) flowerImgModal = allImgs[placedKeys[Math.floor(Math.random() * placedKeys.length)]]; else flowerImgModal = allImgs[allImgKeys[0]]; plantNew = false; }
+  //         } else plantNew = false;
+  //       }
+  //       if (plantNew && newFlowerData && flowerCanvasHeight > 0) {
+  //         setPlacedFlowers(prev => {
+  //           if (!Array.isArray(prev)) return prev;
+  //           if (prev.length < MAX_FLOWERS) {
+  //             let updated = [...prev], selPos = null;
+  //             const occupied = new Set(prev.map(f => f.relativePos ? JSON.stringify(f.relativePos) : null).filter(p => p));
+  //             const availableSlots = RELATIVE_FLOWER_POSITIONS.filter(pos => !occupied.has(JSON.stringify(pos)));
+  //             selPos = availableSlots.length > 0 ? availableSlots[Math.floor(Math.random() * availableSlots.length)] : RELATIVE_FLOWER_POSITIONS[Math.floor(Math.random() * RELATIVE_FLOWER_POSITIONS.length)];
+  //             newFlowerData.relativePos = selPos; updated.push(newFlowerData); return updated;
+  //           } else {
+  //             Alert.alert("알림", "정원이 가득 차서 기존 꽃과 교체합니다.");
+  //             let updated = [...prev]; const idx = Math.floor(Math.random() * prev.length);
+  //             newFlowerData.relativePos = prev[idx].relativePos; updated.splice(idx, 1, newFlowerData); return updated;
+  //           }
+  //         });
+  //       }
+  //       setResultModalMessage(result); setResultModalImage(flowerImgModal); setResultModalEmotionIcon(emotionIconModal); setIsResultModalVisible(true);
+  //     };
+  //     processResult(diagnosisResult, emotionKey, primaryEmotionName, diagnosisMessages);
+  //   } else if (route.params?.diagnosisResult && isLoadingFlowers && navigation?.setParams) {
+  //     navigation.setParams({ diagnosisResult: undefined, emotionKey: undefined, primaryEmotionName: undefined, diagnosisMessages: undefined });
+  //   }
+  // }, [route.params, navigation, flowerCanvasHeight, placedFlowers, isLoadingFlowers, getAppCurrentDate, formatDateToYYYYMMDD]);
+  
   useEffect(() => {
     if (Array.isArray(placedFlowers)) {
       const count = placedFlowers.length; let newSrc = IMAGES.treeImage, newScale = TREE_IMAGE_SCALE_BASE;

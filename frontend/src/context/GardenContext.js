@@ -1,13 +1,16 @@
 // src/context/GardenContext.js
 import React, { createContext, useState, useEffect, useContext, useCallback  } from 'react';
 import { useAuth } from './AuthContext';
-import { getCurrentGarden } from '../api/apiClient';
+import { getCurrentGarden, completeGarden as completeGardenApiCall } from '../api/apiClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import IMAGES from '../constants/images';
-import { formatDateToYYYYMMDD } from '../utils/dateUtils';
+import { getAppCurrentDate, formatDateToYYYYMMDD } from '../utils/dateUtils';
 
-const ASYNC_STORAGE_GARDEN_DETAILS_KEY = '@currentGardenDetails';
-const ASYNC_STORAGE_PLACED_FLOWERS_KEY = '@placedFlowers';
+const GARDEN_DETAILS_KEY = '@currentGardenDetails';
+const PLACED_FLOWERS_KEY = '@placedFlowers';
+const CALENDAR_SCREEN_INITIAL_SYNC_DONE_KEY = '@CalendarScreen_InitialSyncDone_v1';
+const LAST_DIAGNOSIS_DATE_KEY = '@lastDiagnosisDate';
+
 
 
 const emotionTypeIdToClientMap = {
@@ -44,8 +47,8 @@ export const GardenProvider = ({ children }) => {
       if (isLoggedIn) { // 로그인 상태일 때만 시도
         setIsLoadingGarden(true); // 초기 로딩 시작 (선택적)
         try {
-          const detailsString = await AsyncStorage.getItem(ASYNC_STORAGE_GARDEN_DETAILS_KEY);
-          const flowersString = await AsyncStorage.getItem(ASYNC_STORAGE_PLACED_FLOWERS_KEY);
+          const detailsString = await AsyncStorage.getItem(GARDEN_DETAILS_KEY);
+          const flowersString = await AsyncStorage.getItem(PLACED_FLOWERS_KEY);
 
           if (detailsString) {
             setCurrentGardenDetails(JSON.parse(detailsString));
@@ -126,13 +129,19 @@ export const GardenProvider = ({ children }) => {
 
         // 3. 업데이트된 데이터를 AsyncStorage에 저장
         try {
-          await AsyncStorage.setItem(ASYNC_STORAGE_GARDEN_DETAILS_KEY, JSON.stringify(apiDetails));
+          await AsyncStorage.setItem(GARDEN_DETAILS_KEY, JSON.stringify(apiDetails));
           // transformedFlowers는 이미 클라이언트 형식 (source 포함)
-          await AsyncStorage.setItem(ASYNC_STORAGE_PLACED_FLOWERS_KEY, JSON.stringify(transformedFlowers));
+          await AsyncStorage.setItem(PLACED_FLOWERS_KEY, JSON.stringify(transformedFlowers));
           console.log('[GardenContext] Transformed API data saved to AsyncStorage.');
         } catch (storageError) {
           console.error('[GardenContext] Failed to save transformed API data to AsyncStorage:', storageError);
         }
+
+        const currentAppDateForStorage = await getAppCurrentDate();
+        const formattedCurrentAppDate = formatDateToYYYYMMDD(currentAppDateForStorage);
+
+        await AsyncStorage.setItem(LAST_DIAGNOSIS_DATE_KEY, formattedCurrentAppDate);
+        await AsyncStorage.setItem(CALENDAR_SCREEN_INITIAL_SYNC_DONE_KEY, 'true');
 
       } catch (err) {
         console.error("[GardenContext] Failed to fetch/process current garden data from API:", err);
@@ -163,6 +172,32 @@ export const GardenProvider = ({ children }) => {
     fetchCurrentGarden();
   }, [fetchCurrentGarden]); // fetchCurrentGarden은 isLoggedIn에 따라 재생성
 
+  // --- 정원 완성 처리 함수 ---
+  const completeGarden = useCallback(async (gardenId, gardenName, completedDate) => {
+    if (!gardenId || !gardenName || !completedDate) {
+      throw new Error("Garden ID and Name are required to complete the garden.");
+    }
+    setIsCompletingGarden(true); // 정원 완성 처리 중 로딩 상태 시작
+    setGardenError(null);
+    try {
+      console.log(`[GardenContext] Attempting to complete garden ID: ${gardenId} with name: ${gardenName}`);
+
+      const response = await completeGardenApiCall(gardenId, gardenName, completedDate);
+      console.log('[GardenContext] Garden completed successfully on server:', response.data);
+
+      await fetchCurrentGarden();
+
+      return response.data;
+    } catch (error) {
+      console.error('[GardenContext] Failed to complete garden on server:', error);
+      const errorMessage = error.response?.data?.message || error.message || '정원 완성에 실패했습니다.';
+      setGardenError(errorMessage);
+      throw error; // 에러를 다시 throw하여 호출한 쪽(HomeScreen)에서 처리할 수 있도록 함
+    } finally {
+      setIsCompletingGarden(false); // 로딩 상태 종료
+    }
+  }, [fetchCurrentGarden]); // fetchCurrentGarden 의존성
+
   // 꽃 추가 함수: 서버 동기화가 우선되어야 함
   // 현재는 클라이언트에서만 추가하고 AsyncStorage에 저장하는 방식
   // 이상적으로는 서버에 꽃을 추가하고, 성공 응답을 받으면 fetchCurrentGarden()을 다시 호출하여 전체 상태를 동기화
@@ -184,11 +219,13 @@ export const GardenProvider = ({ children }) => {
 
   const value = {
     placedFlowers,
+    setPlacedFlowers,
     addFlower,
     currentGardenDetails,
     isLoadingGarden,
     gardenError,
     refreshCurrentGarden: fetchCurrentGarden,
+    completeGarden,
   };
 
   return (

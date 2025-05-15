@@ -16,7 +16,6 @@ import IMAGES from '../constants/images';
 import { getAppCurrentDate, formatDateToYYYYMMDD } from '../utils/dateUtils';
 import { useAuth } from '../context/AuthContext';
 import { useGarden } from '../context/GardenContext';
-import { keyToEmotionNameMap } from '../constants/emotionMaps'; // emotionMaps.js 파일 생성 가정
 
 // --- 상수 정의 (기존과 동일) ---
 const TREE_IMAGE_SCALE_BASE = 0.3; const TREE_IMAGE_SCALE_2 = 0.4;
@@ -120,7 +119,7 @@ const HomeScreen = ({ navigation, route }) => {
 
   // --- Effects ---
 
-  // 새로운 계정 생성 팝업 (기존 유지)
+  // 새로운 계정 생성 팝업
   useEffect(() => {
     if (isNewAccountJustCreated) {
       // Alert.alert 또는 커스텀 모달 (setIsWelcomeModalVisible(true))
@@ -228,7 +227,7 @@ const HomeScreen = ({ navigation, route }) => {
       setIsGardenCompleteAlertVisible(true);        // 알림 모달 띄우기
       setGardenNameToComplete('');                  // 입력 필드 초기화
 
-      // (선택적) 클라이언트 스냅샷 저장
+      // 클라이언트 스냅샷 저장
       if (snapshotData && completedInfo?.garden_id) {
         const completedGardensString = await AsyncStorage.getItem(COMPLETED_GARDENS_KEY);
         const localCompletedGardens = completedGardensString ? JSON.parse(completedGardensString) : [];
