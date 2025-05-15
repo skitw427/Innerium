@@ -103,6 +103,7 @@ router.get('/current', authMiddleware, async (req, res, next) => {
             y: record.flower_pos_y,
           },
           emotion_type_id: record.emotion_type_id, // 이건 DailyRecord의 직접적인 컬럼이므로 그대로 사용
+          questions_answers: record.questions_answers,
         };
       }).filter(flower => flower && flower.flower_type && flower.flower_type.id !== null), // 만약 위에서 null을 반환했다면 필터링
     });

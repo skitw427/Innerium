@@ -12,7 +12,7 @@ const getRecordDate = () => {
 
 /**
  * @route   POST /daily-records
- * @desc    간단 분석 결과 (대화 내용 없이 감정 정보만) 저장
+ * @desc    간단 분석 결과 저장
  * @access  Private
  */
 router.post('/', authMiddleware, async (req, res, next) => {
@@ -23,9 +23,18 @@ router.post('/', authMiddleware, async (req, res, next) => {
     second_emotion_id, // 선택적
     second_emotion_amount, // 선택적
     record_date: clientRecordDateString,
+    questions_answers: clientQuestionsAnswers,
   } = req.body;
 
   let transaction;
+
+  const DEFINED_FLOWER_POSITIONS = [
+    { x: 0.15, y: 0.75 }, { x: 0.35, y: 0.85 }, { x: 0.55, y: 0.70 },
+    { x: 0.75, y: 0.80 }, { x: 0.20, y: 0.50 }, { x: 0.45, y: 0.55 },
+    { x: 0.65, y: 0.45 }, { x: 0.80, y: 0.55 }, { x: 0.25, y: 0.25 },
+    { x: 0.40, y: 0.30 }, { x: 0.60, y: 0.20 }, { x: 0.75, y: 0.30 }
+  ];
+  const MAX_FLOWERS_IN_GARDEN = DEFINED_FLOWER_POSITIONS.length;
 
   try {
     // --- 1. 입력값 유효성 검사 ---
@@ -46,6 +55,16 @@ router.post('/', authMiddleware, async (req, res, next) => {
         return res.status(400).json({ message: 'second_emotion_amount가 있다면, second_emotion_id도 필수입니다.'});
     }
 
+    if (clientQuestionsAnswers !== undefined) { // questions_answers는 선택적으로 받을 수 있도록 처리 (없으면 undefined)
+      if (!Array.isArray(clientQuestionsAnswers)) {
+        return res.status(400).json({ message: 'questions_answers는 배열이어야 합니다.' });
+      }
+      for (const item of clientQuestionsAnswers) {
+        if (typeof item.question !== 'string' || typeof item.answer !== 'string') {
+          return res.status(400).json({ message: 'questions_answers 배열의 각 항목은 question과 answer 문자열을 포함해야 합니다.' });
+        }
+      }
+    }
 
     transaction = await db.sequelize.transaction(); // 트랜잭션 시작
 
@@ -134,19 +153,70 @@ router.post('/', authMiddleware, async (req, res, next) => {
     }
 
     // --- 6. 꽃 위치 결정 (간단한 랜덤 값 또는 중앙) ---
-    const flowerPosX = parseFloat((Math.random() * 80 + 10).toFixed(2)); // 10 ~ 90 사이의 랜덤 값 (가장자리 피하도록)
-    const flowerPosY = parseFloat((Math.random() * 80 + 10).toFixed(2));
+    let newFlowerPosX, newFlowerPosY;
+    let recordToReplaceId = null; // 교체될 레코드의 ID
 
-    // --- 7. DailyRecord 데이터 구성 ---
-    const questionsAnswers = { // "간단 분석" 이므로 대화 내용은 없음
-      type: "simple_analysis",
-      reported_emotions: {
-        primary: { id: first_emotion_id, amount: first_emotion_amount },
-        ...(second_emotion_id !== undefined && { secondary: { id: second_emotion_id, amount: second_emotion_amount } }),
+    // 현재 정원에 있는 모든 꽃들의 위치 정보 (오늘 기록 제외, 모든 날짜의 꽃)
+    const placedFlowersInGarden = await db.DailyRecord.findAll({
+      where: {
+        garden_id: currentGardenId,
+      },
+      attributes: ['daily_record_id', 'flower_pos_x', 'flower_pos_y'], // ID도 가져와서 교체 시 사용
+      transaction,
+    });
+
+    const currentFlowerCount = placedFlowersInGarden.length;
+
+    if (currentFlowerCount < MAX_FLOWERS_IN_GARDEN) {
+      // 정원이 가득 차지 않았을 때: 새 위치 할당
+      const occupiedPositions = new Set(
+        placedFlowersInGarden.map(f => f.flower_pos_x !== null && f.flower_pos_y !== null ? JSON.stringify({ x: f.flower_pos_x, y: f.flower_pos_y }) : null).filter(p => p)
+      );
+
+      const availableSlots = DEFINED_FLOWER_POSITIONS.filter(pos => !occupiedPositions.has(JSON.stringify(pos)));
+
+      let selectedPos;
+      if (availableSlots.length > 0) {
+        selectedPos = availableSlots[Math.floor(Math.random() * availableSlots.length)];
+      } else {
+        console.warn(`[Garden ID: ${currentGardenId}] No available unique slots from DEFINED_FLOWER_POSITIONS, but garden is not full. Picking a random defined position.`);
+        selectedPos = DEFINED_FLOWER_POSITIONS[Math.floor(Math.random() * DEFINED_FLOWER_POSITIONS.length)];
       }
-    };
+      newFlowerPosX = selectedPos.x;
+      newFlowerPosY = selectedPos.y;
+    } else {
+      // 정원이 가득 찼을 때: 기존 꽃과 교체
+      console.log(`[Garden ID: ${currentGardenId}] Garden is full. Replacing an existing flower.`);
+      // Alert.alert은 백엔드에서 사용 불가, 로그로 대체
+      
+      if (placedFlowersInGarden.length > 0) { // 교체할 꽃이 있는지 확인
+        constrandomIndex = Math.floor(Math.random() * placedFlowersInGarden.length);
+        const flowerToReplace = placedFlowersInGarden[randomIndex];
+        
+        newFlowerPosX = flowerToReplace.flower_pos_x;
+        newFlowerPosY = flowerToReplace.flower_pos_y;
+        recordToReplaceId = flowerToReplace.daily_record_id; // 교체될 레코드 ID 저장
 
-    // 간단한 요약 메시지 생성 (EmotionType 모델에 'name' 필드가 있다고 가정)
+        // 교체될 기존 레코드 삭제
+        await db.DailyRecord.destroy({
+          where: { daily_record_id: recordToReplaceId },
+          transaction,
+        });
+        console.log(`[Garden ID: ${currentGardenId}] Removed flower record ID ${recordToReplaceId} for replacement.`);
+      } else {
+        console.error(`[Garden ID: ${currentGardenId}] Garden is full but no flowers found to replace. This should not happen.`);
+        // fallback: 첫 번째 정의된 위치 사용 또는 에러 반환
+        if (DEFINED_FLOWER_POSITIONS.length > 0) {
+            newFlowerPosX = DEFINED_FLOWER_POSITIONS[0].x;
+            newFlowerPosY = DEFINED_FLOWER_POSITIONS[0].y;
+        } else {
+            // DEFINED_FLOWER_POSITIONS도 비어있으면 심각한 설정 오류
+            await transaction.rollback();
+            return res.status(500).json({ message: "꽃 위치를 결정할 수 없습니다. 관리자에게 문의하세요." });
+        }
+      }
+    }
+
     let resultSummary = `오늘은 주로 ${primaryEmotionType.name}(을)를 느끼셨군요.`;
     if (second_emotion_id !== undefined && second_emotion_amount > 0) {
         const secondaryEmotion = await db.EmotionType.findByPk(second_emotion_id, { attributes: ['name'], transaction });
@@ -163,6 +233,7 @@ router.post('/', authMiddleware, async (req, res, next) => {
       flower_pos_x: flowerPosX,
       flower_pos_y: flowerPosY,
       questions_answers: questionsAnswers, // 프론트에서 받은 감정 정보 저장
+      questions_answers: clientQuestionsAnswers || null,
       result_summary: resultSummary,      // 간단한 요약
     }, { transaction });
 
