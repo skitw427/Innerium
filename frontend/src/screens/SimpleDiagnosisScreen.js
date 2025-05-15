@@ -257,7 +257,42 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
     setAskingPriorityQuestion(false);
     setFinished(false);
    };
+  /**
+   * 채팅 메시지 배열을 서버 전송용 질문-답변 배열로 변환
+   * @param {Array<{id: string, sender: string, text: string}>} messages - 채팅 메시지 배열
+   * @returns {Array<{question: string, answer: string}>}
+   */
+  const transformMessagesToQuestionsAnswers = (messages) => {
+    const questionsAnswers = [];
+    if (!Array.isArray(messages)) {
+      console.warn("transformMessagesToQuestionsAnswers: messages is not an array.");
+      return questionsAnswers;
+    }
 
+    for (let i = 0; i < messages.length; i++) {
+      const currentMessage = messages[i];
+      if (currentMessage.sender === 'bot') {
+        const questionText = currentMessage.text;
+        let answerText = null;
+
+        // 바로 다음 메시지가 사용자의 응답인지 확인
+        if (i + 1 < messages.length && messages[i + 1].sender === 'user') {
+          answerText = messages[i + 1].text;
+          i++;
+          console.warn(`No user answer found for bot question: "${questionText}"`);
+        }
+
+        // 질문과 답변이 모두 유효할 때만 추가
+        if (questionText && answerText !== null) {
+          questionsAnswers.push({
+            question: questionText,
+            answer: answerText,
+          });
+        }
+      }
+    }
+    return questionsAnswers;
+  };
   // 결과 보기 및 저장/네비게이션 핸들러
   const handleViewResult = async () => {
     if (isSubmittingResult) return;
@@ -321,6 +356,9 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
         });
       }
     }
+
+    const questionsAndAnswersForAPI = transformMessagesToQuestionsAnswers(messages);
+    recordData.questions_answers = questionsAndAnswersForAPI;
     
     try {
       const appCurrentDate = await getAppCurrentDate();

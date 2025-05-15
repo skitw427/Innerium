@@ -29,11 +29,16 @@ router.post('/', authMiddleware, async (req, res, next) => {
   let transaction;
 
   const DEFINED_FLOWER_POSITIONS = [
-    { x: 0.15, y: 0.75 }, { x: 0.35, y: 0.85 }, { x: 0.55, y: 0.70 },
-    { x: 0.75, y: 0.80 }, { x: 0.20, y: 0.50 }, { x: 0.45, y: 0.55 },
-    { x: 0.65, y: 0.45 }, { x: 0.80, y: 0.55 }, { x: 0.25, y: 0.25 },
-    { x: 0.40, y: 0.30 }, { x: 0.60, y: 0.20 }, { x: 0.75, y: 0.30 }
+    { x: 0.07, y: 0.2 }, { x: 0.10, y: 0.5 }, { x: 0.08, y: 0.8 },
+    { x: 0.41, y: 0.1 }, { x: 0.40, y: 0.4 }, { x: 0.38, y: 0.65 }, { x: 0.42, y: 0.9 },
+    { x: 0.75, y: 0.25 }, { x: 0.80, y: 0.55 }, { x: 0.78, y: 0.85 },
   ];
+  // const DEFINED_FLOWER_POSITIONS = [
+  //   { x: 0.15, y: 0.75 }, { x: 0.35, y: 0.85 }, { x: 0.55, y: 0.70 },
+  //   { x: 0.75, y: 0.80 }, { x: 0.20, y: 0.50 }, { x: 0.45, y: 0.55 },
+  //   { x: 0.65, y: 0.45 }, { x: 0.80, y: 0.55 }, { x: 0.25, y: 0.25 },
+  //   { x: 0.40, y: 0.30 }, { x: 0.60, y: 0.20 }, { x: 0.75, y: 0.30 }
+  // ];
   const MAX_FLOWERS_IN_GARDEN = DEFINED_FLOWER_POSITIONS.length;
 
   try {
@@ -161,7 +166,7 @@ router.post('/', authMiddleware, async (req, res, next) => {
       where: {
         garden_id: currentGardenId,
       },
-      attributes: ['daily_record_id', 'flower_pos_x', 'flower_pos_y'], // ID도 가져와서 교체 시 사용
+      attributes: ['record_id', 'flower_pos_x', 'flower_pos_y'], // ID도 가져와서 교체 시 사용
       transaction,
     });
 
@@ -190,16 +195,16 @@ router.post('/', authMiddleware, async (req, res, next) => {
       // Alert.alert은 백엔드에서 사용 불가, 로그로 대체
       
       if (placedFlowersInGarden.length > 0) { // 교체할 꽃이 있는지 확인
-        constrandomIndex = Math.floor(Math.random() * placedFlowersInGarden.length);
+        const randomIndex = Math.floor(Math.random() * placedFlowersInGarden.length);
         const flowerToReplace = placedFlowersInGarden[randomIndex];
         
         newFlowerPosX = flowerToReplace.flower_pos_x;
         newFlowerPosY = flowerToReplace.flower_pos_y;
-        recordToReplaceId = flowerToReplace.daily_record_id; // 교체될 레코드 ID 저장
+        recordToReplaceId = flowerToReplace.record_id; // 교체될 레코드 ID 저장
 
         // 교체될 기존 레코드 삭제
         await db.DailyRecord.destroy({
-          where: { daily_record_id: recordToReplaceId },
+          where: { record_id: recordToReplaceId },
           transaction,
         });
         console.log(`[Garden ID: ${currentGardenId}] Removed flower record ID ${recordToReplaceId} for replacement.`);
@@ -230,14 +235,13 @@ router.post('/', authMiddleware, async (req, res, next) => {
       record_date: recordDate,
       emotion_type_id: first_emotion_id, // 주 감정
       chosen_flower_type_id: chosenFlowerTypeId,
-      flower_pos_x: flowerPosX,
-      flower_pos_y: flowerPosY,
-      questions_answers: questionsAnswers, // 프론트에서 받은 감정 정보 저장
+      flower_pos_x: newFlowerPosX,
+      flower_pos_y: newFlowerPosY,
       questions_answers: clientQuestionsAnswers || null,
       result_summary: resultSummary,      // 간단한 요약
     }, { transaction });
 
-    // --- 9. (선택적) 정원 나무 레벨 등 업데이트 ---
+    // --- 9. 정원 나무 레벨 등 업데이트 ---
     await db.Garden.increment('tree_level', {
       by: 1,
       where: { garden_id: currentGardenId },

@@ -103,6 +103,7 @@ router.get('/current', authMiddleware, async (req, res, next) => {
             y: record.flower_pos_y,
           },
           emotion_type_id: record.emotion_type_id, // 이건 DailyRecord의 직접적인 컬럼이므로 그대로 사용
+          record_date: record.record_date,
           questions_answers: record.questions_answers,
         };
       }).filter(flower => flower && flower.flower_type && flower.flower_type.id !== null), // 만약 위에서 null을 반환했다면 필터링
@@ -121,7 +122,7 @@ router.get('/current', authMiddleware, async (req, res, next) => {
 router.post(
   '/:garden_id/complete',
   authMiddleware,
-  uploadSnapshot.single('snapshotImage'),
+  // uploadSnapshot.single('snapshotImage'),
   async (req, res, next) => {
     const userId = req.user.user_id;
     const { garden_id } = req.params;
@@ -134,16 +135,16 @@ router.post(
       return res.status(400).json({ message: '정원 이름(name)이 필요합니다.' });
     }
 
-    if (!req.file) {
-      return res.status(400).json({ message: '정원 스냅샷 이미지 파일(snapshotImage)이 필요합니다.' });
-    }
+    // if (!req.file) {
+    //   return res.status(400).json({ message: '정원 스냅샷 이미지 파일(snapshotImage)이 필요합니다.' });
+    // }
 
-    const tempFilePath = req.file.path; // multer가 저장한 임시 파일의 전체 경로
-    const originalFileExtension = path.extname(req.file.originalname);
+    // const tempFilePath = req.file.path; // multer가 저장한 임시 파일의 전체 경로
+    // const originalFileExtension = path.extname(req.file.originalname);
 
     // 최종 파일명 결정 (user_id와 garden_id 포함)
-    const finalFilename = `user_${userId}_garden_${garden_id}_${Date.now()}${originalFileExtension}`;
-    const finalFilePath = path.join(path.dirname(tempFilePath), finalFilename); // 임시 파일과 같은 디렉토리에 최종 파일명으로
+    // const finalFilename = `user_${userId}_garden_${garden_id}_${Date.now()}${originalFileExtension}`;
+    // const finalFilePath = path.join(path.dirname(tempFilePath), finalFilename); // 임시 파일과 같은 디렉토리에 최종 파일명으로
 
     let transaction;
     try {
@@ -167,32 +168,32 @@ router.post(
       }
 
       // 파일명 변경 (임시 -> 최종)
-      try {
-        await fs.rename(tempFilePath, finalFilePath);
-        console.log(`File renamed from ${tempFilePath} to ${finalFilePath}`);
-      } catch (renameError) {
-        console.error('Error renaming file:', renameError);
-        await fs.unlink(tempFilePath); // 이름 변경 실패 시 임시 파일 삭제
-        throw renameError; // 에러를 다시 던져서 트랜잭션 롤백 및 전체 에러 처리
-      }
+      // try {
+      //   await fs.rename(tempFilePath, finalFilePath);
+      //   console.log(`File renamed from ${tempFilePath} to ${finalFilePath}`);
+      // } catch (renameError) {
+      //   console.error('Error renaming file:', renameError);
+      //   await fs.unlink(tempFilePath); // 이름 변경 실패 시 임시 파일 삭제
+      //   throw renameError; // 에러를 다시 던져서 트랜잭션 롤백 및 전체 에러 처리
+      // }
 
 
       // (선택적) 이전에 스냅샷이 있었다면, 이전 파일 삭제
-      if (garden.snapshot_image_url) {
-        const oldSnapshotPath = path.join(__dirname, '..', 'storage', 'snapshots', garden.snapshot_image_url);
-        try {
-          await fs.access(oldSnapshotPath);
-          await fs.unlink(oldSnapshotPath);
-          console.log(`Old snapshot deleted: ${oldSnapshotPath}`);
-        } catch (err) {
-          console.warn(`Could not delete old snapshot ${oldSnapshotPath}:`, err.message);
-        }
-      }
+      // if (garden.snapshot_image_url) {
+      //   const oldSnapshotPath = path.join(__dirname, '..', 'storage', 'snapshots', garden.snapshot_image_url);
+      //   try {
+      //     await fs.access(oldSnapshotPath);
+      //     await fs.unlink(oldSnapshotPath);
+      //     console.log(`Old snapshot deleted: ${oldSnapshotPath}`);
+      //   } catch (err) {
+      //     console.warn(`Could not delete old snapshot ${oldSnapshotPath}:`, err.message);
+      //   }
+      // }
 
       // 정원 정보 업데이트 (최종 파일명 사용)
       garden.name = name.trim();
       garden.completed_at = new Date();
-      garden.snapshot_image_url = finalFilename; // 최종 파일명 저장
+      // garden.snapshot_image_url = finalFilename; // 최종 파일명 저장
       await garden.save({ transaction });
 
       const user = await db.User.findByPk(userId, { transaction });
@@ -206,7 +207,7 @@ router.post(
         garden_id: garden.garden_id.toString(),
         name: garden.name,
         completed_at: garden.completed_at.toISOString(),
-        snapshot_image_url: `/api/gardens/snapshot/${finalFilename}`, // 최종 파일명으로 URL 생성
+        // snapshot_image_url: `/api/gardens/snapshot/${finalFilename}`, // 최종 파일명으로 URL 생성
       });
 
     } catch (error) {

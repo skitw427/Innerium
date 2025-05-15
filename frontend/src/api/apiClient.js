@@ -270,6 +270,7 @@ export const getCurrentGarden = () => {
  *     emotion_key: string,
  *     image_key: string,
  *     emotion_name: string,
+ *     questions_answers: jsonb
  *     messages: Array<{ sender: 'user' | 'bot', text: string, id?: string }>,
  *     creation_date: string,
  *     relative_pos: { topRatio: number, leftRatio: number } | null
@@ -287,27 +288,30 @@ export const saveCurrentGarden = (gardenData) => {
 };
 
 /**
- * 정원 완성 처리 (이름 결정 및 스냅샷 저장)
+ * 정원 완성 처리 (이름 결정 및 스냅샷 이미지 업로드)
  * [POST] /gardens/{garden_id}/complete
  * 요청 헤더: Authorization: Bearer <user_token> (요청 인터셉터에서 자동 추가)
- * 요청 본문(CompleteGardenReqDTO - 가정된 확장 형식): {
- *   name: string, // 사용자가 정한 정원 이름
- *   snapshot_base64_data?: string // Base64 인코딩된 스냅샷 이미지 데이터 (선택적, API 명세에 따라)
- * }
+ *            Content-Type: multipart/form-data (FormData 사용 시 Axios가 자동 설정)
+ * 요청 본문(FormData):
+ *   - name: string (사용자가 정한 정원 이름)
+ *   - snapshot_image: File (스냅샷 이미지 파일, 선택적)
  * 성공 응답 본문(CompleteGardenResDTO): {
  *   garden_id: string,
  *   name: string,
- *   completed_at: string, // ISO 8601 형식의 날짜/시간 문자열
- *   snapshot_image_url: string // 서버에 저장된 스냅샷 이미지 URL
+ *   completed_at: string,
+ *   snapshot_image_url: string
  * }
  * @param {string} gardenId - 완성 처리할 정원의 ID (경로 파라미터)
- * @param {object} gardenCompleteData - 정원 완성 데이터 (이름, 스냅샷 등)
+ * @param {FormData} formData - 이름과 스냅샷 이미지 파일(선택적)을 포함하는 FormData 객체
  * @returns {Promise<import("axios").AxiosResponse<CompleteGardenResDTO>>} CompleteGardenResDTO 포함 응답
  */
-export const completeGarden = (gardenId, gardenCompleteData) => {
- // Authorization 헤더는 인터셉터가 자동으로 추가합니다.
- // URL 경로에 gardenId를 포함시키고, 두 번째 인자로 요청 본문 데이터를 전달합니다.
- return apiClient.post(`/gardens/${gardenId}/complete`, gardenCompleteData);
+export const completeGarden = (gardenId, formData) => {
+  return apiClient.post(`/gardens/${gardenId}/complete`, formData);
+  // return apiClient.post(`/gardens/${gardenId}/complete`, formData, {
+  //   headers: {
+  //     'Content-Type': 'multipart/form-data',
+  //   },
+  // });
 };
 
 // --- 기존 정원 API 함수들 (주석은 원래 제공된 상세한 내용 유지) ---
@@ -414,6 +418,8 @@ export const converseWithAI = (messageData) => {
  *   first_emotion_amount: number, // 첫 번째 감정 정도 (int -> number)
  *   second_emotion_id: number, // 두 번째 감정 ID (int -> number)
  *   second_emotion_amount: number // 두 번째 감정 정도 (int -> number)
+ *   record_date: string
+ *   questions_answers: jsonb
  * }
  * 성공 응답 본문: 없음음
  * @param {object} recordData - 저장할 간단 진단 결과 데이터.

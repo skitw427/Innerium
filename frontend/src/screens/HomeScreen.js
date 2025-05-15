@@ -233,6 +233,7 @@ const HomeScreen = ({ navigation, route }) => {
     }, [isLoadingFlowers, isGardenFull, currentGardenSnapshotTaken, checkDiagnosisStatus, getAppCurrentDate, formatDateToYYYYMMDD])
   );
 
+  // 진단 결과 처리
   useEffect(() => {
     if (route.params?.diagnosisResult && route.params?.emotionKey && !isLoadingFlowers && Array.isArray(placedFlowers)) {
       const { diagnosisResult, emotionKey, primaryEmotionName, diagnosisMessages } = route.params;
@@ -326,11 +327,16 @@ const HomeScreen = ({ navigation, route }) => {
               if (!flower?.source) return null;
               const aspect = (flower.source.width && flower.source.height) ? flower.source.width / flower.source.height : 1;
               const h = currentFlowerPixelHeight, w = h * aspect;
-              const topR = flower.relativePos?.topRatio ?? 0.5, leftR = flower.relativePos?.leftRatio ?? 0.5;
-              let cTop = flowerCanvasStartY + (topR * flowerCanvasHeight) - (h / 2);
-              let cLeft = flowerCanvasPaddingHorizontal + (leftR * flowerCanvasWidth) - (w / 2);
-              cTop = Math.max(flowerCanvasStartY, Math.min(cTop, flowerCanvasEndY - h));
-              cLeft = Math.max(flowerCanvasPaddingHorizontal, Math.min(cLeft, flowerCanvasPaddingHorizontal + flowerCanvasWidth - w));
+
+              const flowerCenterXInCanvas = flower.position.x * flowerCanvasWidth;
+              const flowerCenterYInCanvas = flower.position.y * flowerCanvasHeight;
+
+              let pixelX = flowerCanvasPaddingHorizontal + flowerCenterXInCanvas - (w / 2);
+              let pixelY = flowerCanvasStartY + flowerCenterYInCanvas - (h / 2);
+
+              let cLeft = Math.max(flowerCanvasPaddingHorizontal, Math.min(pixelX, flowerCanvasPaddingHorizontal + flowerCanvasWidth - w));
+              let cTop = Math.max(flowerCanvasStartY, Math.min(pixelY, flowerCanvasEndY - h));
+
               return (<TouchableOpacity key={flower.id} onPress={() => handleFlowerPress(flower)} style={[styles.placedFlowerImageTouchable, { height: h, width: w, top: cTop, left: cLeft }]} activeOpacity={0.8}><Image source={flower.source} style={styles.placedFlowerImageActual} resizeMode="contain" /></TouchableOpacity>);
             })}
             <View style={styles.treeAreaWrapper}><View style={{ height: topSpacerHeight }} /><View style={[styles.treeContainer, { height: treeContainerHeight, width: treeContainerWidth }]}><Image source={currentTreeImageSource} style={{ width: `${currentTreeImageScalingFactor * 100}%`, height: `${currentTreeImageScalingFactor * 100}%`}} resizeMode="contain" /></View></View>
