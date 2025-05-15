@@ -13,20 +13,35 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.frontend"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "softwareKeyboardLayoutMode": "resize" // 이 부분이 추가되었습니다.
+      "softwareKeyboardLayoutMode": "resize",
+      "useNextNotificationsApi": true,
+      "package": "com.yourcompany.frontend"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store"
-    ]
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#FFFFFF"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "8b22eef6-17a5-4049-9723-a389028e0814"
+      }
+    }
   }
 }
