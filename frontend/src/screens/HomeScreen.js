@@ -23,7 +23,7 @@ const TREE_IMAGE_SCALE_8 = 0.85; const TREE_IMAGE_SCALE_10 = 1;
 const TOP_SPACER_RATIO = 0.1; const TREE_CONTAINER_AREA_RATIO = 0.4;
 const BUTTON_BOTTOM_FIXED_MARGIN = 25;
 const ESTIMATED_NAV_BAR_HEIGHT = 110;
-const FLOWER_HEIGHT_RATIO_OF_WINDOW = 0.1;
+const FLOWER_HEIGHT_RATIO_OF_WINDOW = 0.09; // 수정된 값
 const MAX_FLOWER_HEIGHT = 6000;
 const MIN_FLOWER_HEIGHT = 2;
 
@@ -44,17 +44,16 @@ const keyToEmotionNameMap = {
   Ag: '분노', F: '두려움', Dr: '갈망', Dg: '역겨움',
 };
 
-// 꽃 정보 팝업 내 이미지 관련 비율 상수
 const POPUP_WIDTH_PERCENTAGE_OF_SCREEN = 0.85;
 const MAX_POPUP_WIDTH_ABSOLUTE = 380;
 const POPUP_EFFECTIVE_HEIGHT_PERCENTAGE_OF_SCREEN = 0.6;
 const IMAGE_SIZE_RATIO_OF_POPUP_WIDTH = 0.35;
 const IMAGE_VERTICAL_GAP_RATIO_OF_POPUP_EFFECTIVE_HEIGHT = 0.03;
 const POPUP_IMAGES_CONTAINER_MARGIN_BOTTOM_RATIO_OF_WINDOW_HEIGHT = 0.015;
+const GENERIC_ALERT_POPUP_HEIGHT_RATIO = 0.35;
 
 
 const HomeScreen = ({ navigation, route }) => {
-  // --- State 및 Hooks ---
   const { isTransitioning, handleNavigate } = useScreenTransition();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const { isNewAccountJustCreated, clearNewAccountFlag } = useAuth();
@@ -77,9 +76,12 @@ const HomeScreen = ({ navigation, route }) => {
   const chatHistoryFlatListRef = useRef(null);
   const [isLoadingChatHistory, setIsLoadingChatHistory] = useState(false);
   const [pendingGardenCompletionAlert, setPendingGardenCompletionAlert] = useState(false);
+  const [isGardenCompleteAlertVisible, setIsGardenCompleteAlertVisible] = useState(false);
+  const [gardenCompleteAlertMessage, setGardenCompleteAlertMessage] = useState("정원 완성! 현재 정원의 모습이 보관함에 저장되었습니다.");
+  const [isGardenResetAlertVisible, setIsGardenResetAlertVisible] = useState(false);
+  const [gardenResetAlertMessage, setGardenResetAlertMessage] = useState("새로운 정원을 가꿀 시간입니다!");
 
 
-  // --- 계산된 값들 ---
   const topSpacerHeight = windowHeight * TOP_SPACER_RATIO;
   const treeContainerHeight = windowHeight * TREE_CONTAINER_AREA_RATIO;
   const treeContainerWidth = treeContainerHeight;
@@ -91,7 +93,6 @@ const HomeScreen = ({ navigation, route }) => {
   const calculatedFlowerHeight = windowHeight * FLOWER_HEIGHT_RATIO_OF_WINDOW;
   const currentFlowerPixelHeight = Math.max(MIN_FLOWER_HEIGHT, Math.min(calculatedFlowerHeight, MAX_FLOWER_HEIGHT));
 
-  // --- 꽃 정보 팝업 내 이미지 동적 스타일 계산 ---
   const flowerInfoModalDynamicStyles = useMemo(() => {
     const calculatedPopupWidth = Math.min(windowWidth * POPUP_WIDTH_PERCENTAGE_OF_SCREEN, MAX_POPUP_WIDTH_ABSOLUTE);
     const popupEffectiveHeight = windowHeight * POPUP_EFFECTIVE_HEIGHT_PERCENTAGE_OF_SCREEN;
@@ -105,7 +106,6 @@ const HomeScreen = ({ navigation, route }) => {
   }, [windowWidth, windowHeight]);
 
 
-  // --- Effects ---
   useEffect(() => {
     if (isNewAccountJustCreated) {
       Alert.alert("환영합니다!", "새로운 계정이 생성되었습니다!", [{ text: "확인", onPress: () => clearNewAccountFlag() }], { cancelable: false });
@@ -161,11 +161,10 @@ const HomeScreen = ({ navigation, route }) => {
       await AsyncStorage.setItem(COMPLETED_GARDENS_KEY, JSON.stringify(completedGardens));
       await AsyncStorage.setItem(CURRENT_GARDEN_SNAPSHOT_TAKEN_KEY, 'true');
       setCurrentGardenSnapshotTaken(true);
-
       if (isResultModalVisible) {
         setPendingGardenCompletionAlert(true);
       } else {
-        Alert.alert("정원 완성!", "현재 정원의 모습이 보관함에 저장되었습니다.");
+        setIsGardenCompleteAlertVisible(true);
       }
     } catch (error) { console.error("[HomeScreen] Failed to capture/save garden:", error); Alert.alert("오류", "정원 이미지 저장 실패."); }
   }, [isResultModalVisible]);
@@ -179,11 +178,10 @@ const HomeScreen = ({ navigation, route }) => {
 
   useEffect(() => {
     if (!isResultModalVisible && pendingGardenCompletionAlert) {
-      Alert.alert("정원 완성!", "현재 정원의 모습이 보관함에 저장되었습니다.");
+      setIsGardenCompleteAlertVisible(true);
       setPendingGardenCompletionAlert(false);
     }
   }, [isResultModalVisible, pendingGardenCompletionAlert]);
-
 
   const checkDiagnosisStatus = useCallback(async () => {
     try {
@@ -205,7 +203,6 @@ const HomeScreen = ({ navigation, route }) => {
             const currentAppDateObj = await getAppCurrentDate();
             const currentAppDateFormatted = formatDateToYYYYMMDD(currentAppDateObj);
             if (lastKnownDateForGarden && lastKnownDateForGarden !== currentAppDateFormatted) {
-              console.log('[HomeScreen] Date changed, garden was full & snapshot taken. Resetting garden.');
               setPlacedFlowers([]);
               setCurrentGardenSnapshotTaken(false);
               setIsGardenFull(false);
@@ -213,7 +210,7 @@ const HomeScreen = ({ navigation, route }) => {
               await AsyncStorage.setItem(CURRENT_GARDEN_SNAPSHOT_TAKEN_KEY, 'false');
               await AsyncStorage.removeItem(LAST_DIAGNOSIS_DATE_KEY);
               gardenWasReset = true;
-              Alert.alert("새로운 날", "새로운 정원을 가꿀 시간입니다!");
+              setIsGardenResetAlertVisible(true);
             }
           } catch (error) {
             console.error('[HomeScreen] Error in resetting garden logic on date change:', error);
@@ -225,35 +222,15 @@ const HomeScreen = ({ navigation, route }) => {
             await checkDiagnosisStatus();
         }
       };
-
       performFocusActions();
-      
-      // BackHandler 로직 수정
-      const onBackPress = () => {
-        // 홈 화면에서는 뒤로가기 시 앱 종료 방지 또는 특정 동작 수행
-        // 여기서는 기본 동작 (true 반환)을 유지하여 뒤로가기 이벤트를 소비하고 앱 종료를 막음
-        return true; 
-      };
-
+      const onBackPress = () => true;
       const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-
       return () => {
         if (subscription && typeof subscription.remove === 'function') {
           subscription.remove();
-        } else {
-          // 이전 방식의 removeEventListener도 혹시 모르니 시도 (환경에 따라 다를 수 있음)
-          // BackHandler.removeEventListener('hardwareBackPress', onBackPress);
-          // 이 부분은 에러의 원인이었으므로, subscription.remove()가 주된 방식임
         }
       };
-    }, [
-        isLoadingFlowers,
-        isGardenFull,
-        currentGardenSnapshotTaken,
-        checkDiagnosisStatus,
-        getAppCurrentDate,
-        formatDateToYYYYMMDD
-    ])
+    }, [isLoadingFlowers, isGardenFull, currentGardenSnapshotTaken, checkDiagnosisStatus, getAppCurrentDate, formatDateToYYYYMMDD])
   );
 
   useEffect(() => {
@@ -321,8 +298,6 @@ const HomeScreen = ({ navigation, route }) => {
     } else setIsLoadingChatHistory(false);
   }, [isFlowerInfoModalVisible, showChatHistoryInModal, selectedFlowerData]);
 
-
-  // --- 핸들러 함수들 ---
   const handleEmotionCheckPress = () => setIsModalVisible(true);
   const handleConfirmEmotionCheck = () => { setIsModalVisible(false); handleNavigate(navigation, 'DeepDiagnosis'); };
   const handleSimpleEmotionCheck = () => { setIsModalVisible(false); navigation.navigate('SimpleDiagnosis'); };
@@ -338,8 +313,9 @@ const HomeScreen = ({ navigation, route }) => {
   const renderChatHistoryItem = ({ item }) => (
     <View style={[styles.chatMessageOuterContainer, item.sender === 'bot' ? styles.chatBotRowContainer : styles.chatUserRowContainer]}><View style={[styles.chatMessageBubble, item.sender === 'bot' ? styles.chatBotBubble : styles.chatUserBubble]}><Text style={styles.chatMessageText}>{item.text}</Text></View></View>
   );
+  const handleGardenCompleteAlertClose = () => setIsGardenCompleteAlertVisible(false);
+  const handleGardenResetAlertClose = () => setIsGardenResetAlertVisible(false);
 
-  // --- JSX 렌더링 ---
   return (
     <SafeAreaView style={styles.safeArea}>
       {isLoadingFlowers && (<View style={styles.loadingOverlay}><ActivityIndicator size="large" color="#4CAF50" /><Text style={styles.loadingText}>정원 불러오는 중...</Text></View>)}
@@ -367,27 +343,58 @@ const HomeScreen = ({ navigation, route }) => {
       </View>
       <Modal visible={isModalVisible} transparent={true} animationType="fade" onRequestClose={handleModalClose}><TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={handleModalClose}><TouchableOpacity activeOpacity={1} style={styles.modalContentContainer}><View style={styles.modalContent}><Text style={styles.modalText}>감정 진단을 시작하시겠습니까?</Text><View style={styles.modalButtons}><TouchableOpacity onPress={handleSimpleEmotionCheck} style={styles.modalDialogButton} activeOpacity={0.7}><Text style={styles.modalDialogButtonText}>간단 진단</Text></TouchableOpacity><TouchableOpacity onPress={handleConfirmEmotionCheck} style={styles.modalDialogButton} activeOpacity={0.7}><Text style={styles.modalDialogButtonText}>심층 진단</Text></TouchableOpacity></View></View></TouchableOpacity></TouchableOpacity></Modal>
       <Modal visible={isResultModalVisible} transparent={true} animationType="fade" onRequestClose={handleResultModalClose}><TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={handleResultModalClose}><TouchableOpacity activeOpacity={1} style={styles.resultModalContentContainer}><View style={styles.resultModalContent}>{resultModalEmotionIcon && (<Image source={resultModalEmotionIcon} style={styles.resultEmotionIcon} resizeMode="contain" />)}{resultModalImage ? (<Image source={resultModalImage} style={styles.resultFlowerImage} resizeMode="contain" />) : (<View style={styles.resultImagePlaceholder}><Text>새로운 꽃 없음</Text></View>)}<Text style={styles.resultModalText}>{resultModalMessage}</Text><TouchableOpacity onPress={handleResultModalClose} style={styles.resultCloseButton} activeOpacity={0.7}><Text style={styles.resultCloseButtonText}>확인</Text></TouchableOpacity></View></TouchableOpacity></TouchableOpacity></Modal>
+      
       {selectedFlowerData && (
         <Modal visible={isFlowerInfoModalVisible} transparent={true} animationType="fade" onRequestClose={handleFlowerInfoModalClose}>
           <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={handleFlowerInfoModalClose}>
             <TouchableOpacity activeOpacity={1} style={[styles.flowerInfoModalContainer, { height: windowHeight * POPUP_EFFECTIVE_HEIGHT_PERCENTAGE_OF_SCREEN, maxHeight: 500 }]}>
               <View style={styles.flowerInfoModalContent}>
-                {showChatHistoryInModal ? (
-                  <><Text style={styles.flowerInfoTitle}>대화 기록</Text><View style={styles.chatHistoryContainer}>{isLoadingChatHistory ? (<View style={styles.chatLoadingContainer}><ListActivityIndicator size="small" color="#2196F3" /><Text style={styles.chatLoadingText}>대화 기록 불러오는 중...</Text></View>) : ((selectedFlowerData.messages?.length >= 0) ? (<FlatList ref={chatHistoryFlatListRef} data={selectedFlowerData.messages} renderItem={renderChatHistoryItem} keyExtractor={(item, idx) => item.id || `chat-${idx}-${Date.now()}`} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 10, flexGrow: 1 }} ListEmptyComponent={<View style={styles.emptyChatContainer}><Text style={styles.emptyChatText}>대화 기록이 없습니다.</Text></View>} extraData={selectedFlowerData.messages} initialNumToRender={10} windowSize={5} removeClippedSubviews={Platform.OS === 'android'} />) : (<View style={styles.emptyChatContainer}><Text style={styles.emptyChatText}>대화 기록을 불러올 수 없습니다.</Text></View>))}</View><View style={styles.flowerInfoButtonArea}><TouchableOpacity onPress={handleToggleChatHistoryInModal} style={styles.flowerInfoButton}><Text style={styles.flowerInfoButtonText}>기본 정보 보기</Text></TouchableOpacity><TouchableOpacity onPress={handleFlowerInfoModalClose} style={[styles.flowerInfoButton, styles.flowerInfoCloseButton]}><Text style={styles.flowerInfoButtonText}>닫기</Text></TouchableOpacity></View></>
-                ) : (
-                  <><Text style={styles.flowerInfoTitle}>{selectedFlowerData.creationDate || '날짜 정보 없음'}</Text><View style={styles.flowerInfoMainContent}><View style={[styles.flowerInfoImagesContainer, flowerInfoModalDynamicStyles.imagesContainer]}>{selectedFlowerData.source && (<Image source={selectedFlowerData.source} style={flowerInfoModalDynamicStyles.displayImage} resizeMode="contain" />)}{IMAGES.emotionIcon?.[selectedFlowerData.emotionKey] && (<Image source={IMAGES.emotionIcon[selectedFlowerData.emotionKey]} style={flowerInfoModalDynamicStyles.displayImage} resizeMode="contain" />)}</View><Text style={styles.flowerInfoEmotionName}>{selectedFlowerData.emotionName}</Text></View><View style={styles.flowerInfoButtonArea}>{selectedFlowerData.messages?.length > 0 && (<TouchableOpacity onPress={handleToggleChatHistoryInModal} style={styles.flowerInfoButton}><Text style={styles.flowerInfoButtonText}>대화 기록 보기</Text></TouchableOpacity>)}<TouchableOpacity onPress={handleFlowerInfoModalClose} style={[styles.flowerInfoButton, styles.flowerInfoCloseButton, !(selectedFlowerData.messages?.length > 0) && { alignSelf: 'center'}]}><Text style={styles.flowerInfoButtonText}>닫기</Text></TouchableOpacity></View></>
+                {showChatHistoryInModal ? ( <><Text style={styles.flowerInfoTitle}>대화 기록</Text><View style={styles.chatHistoryContainer}>{isLoadingChatHistory ? (<View style={styles.chatLoadingContainer}><ListActivityIndicator size="small" color="#2196F3" /><Text style={styles.chatLoadingText}>대화 기록 불러오는 중...</Text></View>) : ((selectedFlowerData.messages?.length >= 0) ? (<FlatList ref={chatHistoryFlatListRef} data={selectedFlowerData.messages} renderItem={renderChatHistoryItem} keyExtractor={(item, idx) => item.id || `chat-${idx}-${Date.now()}`} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 10, flexGrow: 1 }} ListEmptyComponent={<View style={styles.emptyChatContainer}><Text style={styles.emptyChatText}>대화 기록이 없습니다.</Text></View>} extraData={selectedFlowerData.messages} initialNumToRender={10} windowSize={5} removeClippedSubviews={Platform.OS === 'android'} />) : (<View style={styles.emptyChatContainer}><Text style={styles.emptyChatText}>대화 기록을 불러올 수 없습니다.</Text></View>))}</View><View style={styles.flowerInfoButtonArea}><TouchableOpacity onPress={handleToggleChatHistoryInModal} style={styles.flowerInfoButton}><Text style={styles.flowerInfoButtonText}>기본 정보 보기</Text></TouchableOpacity><TouchableOpacity onPress={handleFlowerInfoModalClose} style={[styles.flowerInfoButton, styles.flowerInfoCloseButton]}><Text style={styles.flowerInfoButtonText}>닫기</Text></TouchableOpacity></View></>
+                ) : ( <><Text style={styles.flowerInfoTitle}>{selectedFlowerData.creationDate || '날짜 정보 없음'}</Text><View style={styles.flowerInfoMainContent}><View style={[styles.flowerInfoImagesContainer, flowerInfoModalDynamicStyles.imagesContainer]}>{selectedFlowerData.source && (<Image source={selectedFlowerData.source} style={flowerInfoModalDynamicStyles.displayImage} resizeMode="contain" />)}{IMAGES.emotionIcon?.[selectedFlowerData.emotionKey] && (<Image source={IMAGES.emotionIcon[selectedFlowerData.emotionKey]} style={flowerInfoModalDynamicStyles.displayImage} resizeMode="contain" />)}</View><Text style={styles.flowerInfoEmotionName}>{selectedFlowerData.emotionName}</Text></View><View style={styles.flowerInfoButtonArea}>{selectedFlowerData.messages?.length > 0 && (<TouchableOpacity onPress={handleToggleChatHistoryInModal} style={styles.flowerInfoButton}><Text style={styles.flowerInfoButtonText}>대화 기록 보기</Text></TouchableOpacity>)}<TouchableOpacity onPress={handleFlowerInfoModalClose} style={[styles.flowerInfoButton, styles.flowerInfoCloseButton, !(selectedFlowerData.messages?.length > 0) && { alignSelf: 'center'}]}><Text style={styles.flowerInfoButtonText}>닫기</Text></TouchableOpacity></View></>
                 )}
               </View>
             </TouchableOpacity>
           </TouchableOpacity>
         </Modal>
       )}
+
+      <Modal visible={isGardenCompleteAlertVisible} transparent={true} animationType="fade" onRequestClose={handleGardenCompleteAlertClose}>
+          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={handleGardenCompleteAlertClose}>
+              <TouchableOpacity activeOpacity={1} style={[styles.genericInfoModalContainer, { height: windowHeight * GENERIC_ALERT_POPUP_HEIGHT_RATIO, maxHeight: 250 }]}>
+                  <View style={styles.genericInfoModalContent}>
+                      <Text style={styles.genericInfoModalTitle}>알림</Text>
+                      <Text style={styles.genericInfoModalMessage}>{gardenCompleteAlertMessage}</Text>
+                  </View>
+                  <View style={styles.genericInfoModalButtonContainer}>
+                      <TouchableOpacity onPress={handleGardenCompleteAlertClose} style={styles.genericInfoModalButton}>
+                          <Text style={styles.genericInfoModalButtonText}>확인</Text>
+                      </TouchableOpacity>
+                  </View>
+              </TouchableOpacity>
+          </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={isGardenResetAlertVisible} transparent={true} animationType="fade" onRequestClose={handleGardenResetAlertClose}>
+          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={handleGardenResetAlertClose}>
+              <TouchableOpacity activeOpacity={1} style={[styles.genericInfoModalContainer, { height: windowHeight * GENERIC_ALERT_POPUP_HEIGHT_RATIO, maxHeight: 250 }]}>
+                  <View style={styles.genericInfoModalContent}>
+                      <Text style={styles.genericInfoModalTitle}>새로운 날</Text>
+                      <Text style={styles.genericInfoModalMessage}>{gardenResetAlertMessage}</Text>
+                  </View>
+                  <View style={styles.genericInfoModalButtonContainer}>
+                      <TouchableOpacity onPress={handleGardenResetAlertClose} style={styles.genericInfoModalButton}>
+                          <Text style={styles.genericInfoModalButtonText}>확인</Text>
+                      </TouchableOpacity>
+                  </View>
+              </TouchableOpacity>
+          </TouchableOpacity>
+      </Modal>
+
       <StatusBar style="dark" />
     </SafeAreaView>
   );
 };
 
-// --- 스타일 정의 ---
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#eef7ff' },
   loadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.8)', justifyContent: 'center', alignItems: 'center', zIndex: 999 },
@@ -429,6 +436,13 @@ const styles = StyleSheet.create({
   flowerInfoButton: { backgroundColor: '#2196F3', paddingVertical: 10, borderRadius: 8, width: '90%', alignItems: 'center' },
   flowerInfoCloseButton: { backgroundColor: '#757575' },
   flowerInfoButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  genericInfoModalContainer: { width: `${POPUP_WIDTH_PERCENTAGE_OF_SCREEN * 100}%`, maxWidth: MAX_POPUP_WIDTH_ABSOLUTE, backgroundColor: 'white', borderRadius: 15, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, overflow: 'hidden', },
+  genericInfoModalContent: { width: '100%', paddingHorizontal: 25, paddingTop: 20, paddingBottom: 60, alignItems: 'center', flex: 1, justifyContent: 'center', }, // 수정됨
+  genericInfoModalTitle: { fontSize: 20, fontWeight: 'bold', color: '#333', textAlign: 'center', marginBottom: 15, },
+  genericInfoModalMessage: { fontSize: 17, color: '#333', textAlign: 'center', marginBottom: 25, lineHeight: 24, },
+  genericInfoModalButtonContainer: { position: 'absolute', bottom: 20, left: 0, right: 0, alignItems: 'center', }, // 추가됨
+  genericInfoModalButton: { backgroundColor: '#007bff', borderRadius: 8, paddingVertical: 12, paddingHorizontal: 35, }, // alignSelf 제거
+  genericInfoModalButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
   chatHistoryContainer: { flex: 1, width: '100%', paddingHorizontal: 5, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#eee' },
   chatLoadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   chatLoadingText: { marginTop: 8, fontSize: 14, color: '#666' },
