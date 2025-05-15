@@ -13,7 +13,7 @@ import {
   Platform,
 } from 'react-native';
 // LinearGradient는 "결과 보기" 버튼에 더 이상 사용되지 않으므로 제거합니다.
-// import { LinearGradient } from 'expo-linear-gradient'; 
+// import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAppCurrentDate, formatDateToYYYYMMDD } from '../utils/dateUtils';
 
@@ -263,24 +263,19 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
     setIsSubmittingResult(true); // 로딩 상태 시작
 
     // --- 0. API 전송을 위한 감정 및 정도 결정 ---
-    // 이 변수들은 API로 전송될 최종 첫번째, 두번째 감정/정도를 담습니다.
     let apiFirstEmotionName = firstEmotion;
     let apiFirstEmotionDegree = firstDegree;
     let apiSecondEmotionName = secondEmotion;
     let apiSecondEmotionDegree = secondDegree;
 
-    // 두 감정이 모두 존재하고, 정도도 있는 경우에만 순서 조정 로직 실행
     if (firstEmotion && firstDegree !== null && secondEmotion && secondEmotion !== '없음' && secondDegree !== null) {
       if (firstDegree < secondDegree) {
-        // 두 번째 감정의 정도가 더 크면, 두 번째 감정을 API의 첫 번째 감정으로 설정
         apiFirstEmotionName = secondEmotion;
         apiFirstEmotionDegree = secondDegree;
         apiSecondEmotionName = firstEmotion;
         apiSecondEmotionDegree = firstDegree;
       } else if (firstDegree === secondDegree) {
-        // 정도가 같을 경우, 우선순위 선택된 감정을 API의 첫 번째 감정으로 설정
         if (prioritySelectedEmotion && prioritySelectedEmotion === secondEmotion) {
-          // 사용자가 원래의 두 번째 감정을 우선으로 선택했다면 스왑
           apiFirstEmotionName = secondEmotion;
           apiFirstEmotionDegree = secondDegree;
           apiSecondEmotionName = firstEmotion;
@@ -294,88 +289,67 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
     setSecondEmotion(apiSecondEmotionName);
     setSecondDegree(apiSecondEmotionDegree);
 
-
     // --- 1. 서버에 전송할 데이터 준비 ---
     const firstEmotionId = emotionNameToIdMap[apiFirstEmotionName] || null;
-    const firstEmotionAmount = apiFirstEmotionDegree; // 사용자가 1~7 사이 숫자를 선택하므로, 이미 숫자
+    const firstEmotionAmount = apiFirstEmotionDegree;
+    const recordData = {};
 
-    // API 요청 본문 객체 초기화 (필수 필드만 포함하도록 구성)
-    const recordData = {}; // 빈 객체로 시작
-
-    // 첫 번째 감정 데이터 추가 (필수라고 가정)
-    // firstEmotionId와 firstEmotionAmount가 유효한 숫자인지 확인
     if (firstEmotionId !== null && typeof firstEmotionId === 'number' &&
         firstEmotionAmount !== null && typeof firstEmotionAmount === 'number') {
       recordData.first_emotion_id = firstEmotionId;
       recordData.first_emotion_amount = firstEmotionAmount;
     } else {
-      // 이 경우는 firstEmotion이 emotionNameToIdMap에 없거나, firstDegree가 설정되지 않은 치명적 오류.
       console.error("Validation Error: First emotion data is missing or invalid.", {
         apiFirstEmotionName, apiFirstEmotionDegree, firstEmotionId, firstEmotionAmount
       });
       Alert.alert("오류", "첫 번째 감정 정보가 올바르지 않아 저장할 수 없습니다.\n앱을 다시 시작해주세요.");
       setIsSubmittingResult(false);
-      return; // 여기서 중단
+      return;
     }
 
-    // 두 번째 감정 데이터 처리
-    // 조건: secondEmotion이 존재하고, '없음'이 아니며, secondDegree도 null이 아닌 경우
     if (apiSecondEmotionName && apiSecondEmotionName !== '없음' && apiSecondEmotionDegree !== null) {
       const tempSecondEmotionId = emotionNameToIdMap[apiSecondEmotionName] || null;
-      const tempSecondEmotionAmount = apiSecondEmotionDegree; // 사용자가 1~7 사이 숫자를 선택
-
-      // 두 번째 감정 ID와 정도가 모두 유효한 숫자인 경우에만 recordData에 추가
+      const tempSecondEmotionAmount = apiSecondEmotionDegree;
       if (tempSecondEmotionId !== null && typeof tempSecondEmotionId === 'number' &&
           tempSecondEmotionAmount !== null && typeof tempSecondEmotionAmount === 'number') {
         recordData.second_emotion_id = tempSecondEmotionId;
         recordData.second_emotion_amount = tempSecondEmotionAmount;
       } else {
-        console.warn("Second emotion data was intended but could not be resolved to valid ID/Amount. This should not happen if '없음' was chosen.", {
+        console.warn("Second emotion data was intended but could not be resolved to valid ID/Amount.", {
           apiSecondEmotionName, apiSecondEmotionDegree, tempSecondEmotionId, tempSecondEmotionAmount
         });
       }
     }
-
-    // 디버깅용 로그 (API 요청 전 데이터 확인)
-    console.log("--- API Request Data for /daily-records ---");
-    console.log(recordData); // 이 로그를 통해 서버로 어떤 데이터가 전송되는지 확인!
-    console.log("-------------------------------------------");
     
     try {
-      const appCurrentDate = await getAppCurrentDate(); // 이 함수가 Promise를 반환한다고 가정
+      const appCurrentDate = await getAppCurrentDate();
       if (appCurrentDate && appCurrentDate instanceof Date && !isNaN(appCurrentDate)) {
-        recordData.record_date = appCurrentDate.toISOString(); // ISO 문자열로 변환하여 전송
+        recordData.record_date = appCurrentDate.toISOString();
       } else {
-        console.warn("Could not get a valid appCurrentDate from getAppCurrentDate(). Server time will be used.");
+        console.warn("Could not get a valid appCurrentDate. Server time will be used.");
       }
-      // --- 2. API 호출하여 서버에 데이터 저장 ---
       await saveDailyRecord(recordData);
       console.log('[SimpleDiagnosisScreen] Daily record saved to server successfully.');
 
-      // --- 3. 서버 저장 성공 후, 기존 로컬 저장 및 화면 이동 로직 실행 ---
-
-      // 주요 감정 및 결과 메시지 결정
+      // --- 3. 서버 저장 성공 후, 로컬 저장 및 화면 이동 ---
       let primaryEmotion = "감정 정보 없음";
       let primaryEmotionKey = null;
 
       if (apiFirstEmotionName && apiFirstEmotionDegree !== null) primaryEmotion = apiFirstEmotionName;
       else {
-              primaryEmotion = apiFirstEmotionName;
-              console.warn("Priority emotion was expected but not set. Defaulting to first emotion.");
-            }
+        primaryEmotion = apiFirstEmotionName; // 만약 degree가 null이어도 이름은 유지
+        console.warn("Degree for primary emotion might be null. Defaulting to first emotion name.");
+      }
 
       let resultAlertMessage = `오늘 주로 느낀 감정은 '${primaryEmotion}'입니다.`;
-      if (primaryEmotion === "감정 정보 없음") {
-          if (apiFirstEmotionName) {
-              primaryEmotion = apiFirstEmotionName;
-              resultAlertMessage = `오늘 주로 느낀 감정은 '${primaryEmotion}'입니다.`;
-          } else {
-              resultAlertMessage = "감정 정보를 확인할 수 없습니다.";
-          }
+      if (primaryEmotion === "감정 정보 없음" && apiFirstEmotionName) {
+        primaryEmotion = apiFirstEmotionName;
+        resultAlertMessage = `오늘 주로 느낀 감정은 '${primaryEmotion}'입니다.`;
+      } else if (primaryEmotion === "감정 정보 없음") {
+        resultAlertMessage = "감정 정보를 확인할 수 없습니다.";
       }
-      primaryEmotionKey = emotionToKeyMap[primaryEmotion] || null; // 이건 AsyncStorage 저장용 키
+      primaryEmotionKey = emotionToKeyMap[primaryEmotion] || null;
 
-      // 디버깅을 위한 결과 로그 출력 (기존 코드)
       console.log("--- 진단 결과 데이터 (For AsyncStorage & Navigation) ---");
       console.log("첫번째 감정:", apiFirstEmotionName, "| 정도:", apiFirstEmotionDegree);
       console.log("두번째 감정:", apiSecondEmotionName, "| 정도:", apiSecondEmotionDegree);
@@ -383,130 +357,108 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
       console.log("주요 감정:", primaryEmotion, "| 키:", primaryEmotionKey);
       console.log("----------------------------------------------------");
 
-      // AsyncStorage 저장
-      const currentAppDate = await getAppCurrentDate();
-      const formattedCurrentAppDate = formatDateToYYYYMMDD(currentAppDate);
+      const currentAppDateForStorage = await getAppCurrentDate();
+      const formattedCurrentAppDate = formatDateToYYYYMMDD(currentAppDateForStorage);
 
       await AsyncStorage.setItem(LAST_DIAGNOSIS_DATE_KEY, formattedCurrentAppDate);
       console.log(`[SimpleDiagnosisScreen] Saved last diagnosis date: ${formattedCurrentAppDate}`);
 
       if (primaryEmotionKey) {
           const emotionLogKey = `${EMOTION_LOG_PREFIX}${formattedCurrentAppDate}`;
-          await AsyncStorage.setItem(emotionLogKey, primaryEmotionKey);
-          console.log(`[SimpleDiagnosisScreen] Saved emotion log for ${formattedCurrentAppDate}: ${primaryEmotionKey}`);
+          // <<<< 중요 변경: 상세 정보 저장 >>>>
+          const dataToStore = {
+              emotionKey: primaryEmotionKey,
+              emotionName: primaryEmotion, 
+              messages: messages,          // 현재까지의 대화 기록 전체
+              creationDate: formattedCurrentAppDate // YYYY-MM-DD 형식
+          };
+          await AsyncStorage.setItem(emotionLogKey, JSON.stringify(dataToStore));
+          console.log(`[SimpleDiagnosisScreen] Saved detailed emotion log for ${formattedCurrentAppDate}:`, dataToStore);
       } else {
           console.log(`[SimpleDiagnosisScreen] No primary emotion key to save for ${formattedCurrentAppDate}.`);
       }
 
-      // 화면 이동
       navigation.navigate('MainTabs', {
         screen: 'Home',
         params: {
           diagnosisResult: resultAlertMessage,
           emotionKey: primaryEmotionKey,
+          primaryEmotionName: primaryEmotion, // HomeScreen에서 사용할 수 있도록 전달
           diagnosisCompletedToday: true,
-          diagnosisMessages: messages,
-          diagnosisDate: currentAppDate
+          diagnosisMessages: messages, // HomeScreen 결과 모달용으로도 전달 (선택적)
+          diagnosisDate: currentAppDateForStorage // HomeScreen에서 사용할 수 있도록 전달
         },
         merge: true,
       });
 
     } catch (error) {
-      // --- 4. API 호출 또는 이후 과정에서 오류 발생 시 처리 ---
       console.error("Error saving data or navigating:", error);
       let errorMessage = "결과 처리 중 문제가 발생했습니다.";
       if (error.response) {
-        // 서버가 응답을 반환했지만, 에러 상태 코드일 경우 (4xx, 5xx)
-        console.error("Server Error Response Data:", error.response.data);
-        console.error("Server Error Response Status:", error.response.status);
-        // error.response.data에 서버가 보낸 구체적인 에러 메시지가 있을 수 있습니다.
         errorMessage = `서버에 저장 중 오류가 발생했습니다. (상태: ${error.response.status})`;
       } else if (error.request) {
-        // 요청은 이루어졌으나 응답을 받지 못한 경우 (네트워크 문제 등)
-        console.error("No response received from server:", error.request);
         errorMessage = "서버 응답이 없습니다. 네트워크 연결을 확인해주세요.";
-      } else {
-        // 요청 설정 중 발생한 오류
-        console.error("Error setting up request:", error.message);
       }
       Alert.alert("오류", errorMessage);
-      setIsSubmittingResult(false); // 오류 발생 시 버튼 다시 활성화
+      setIsSubmittingResult(false);
     }
   };
 
-  // JSX 렌더링
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* 키보드 나타날 때 화면 가리지 않도록 설정 */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0} // iOS 상단 여백 고려
+        keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
       >
         <View style={styles.outerContainer}>
-          {/* 상단 여백 */}
           <View style={styles.topSpacing} />
-          {/* 채팅 메시지 목록 */}
           <View style={styles.chatListContainer}>
             <FlatList
-              ref={flatListRef} // 스크롤 제어 위한 ref
-              data={messages} // 메시지 데이터 배열
-              keyExtractor={item => item.id} // 각 항목의 고유 키
-              renderItem={({ item }) => ( // 각 메시지 렌더링 방식 정의
-                <View style={[
-                  styles.messageOuterContainer, // 메시지 행 전체 컨테이너
-                  item.sender === 'bot' ? styles.botRowContainer : styles.userRowContainer // 발신자에 따른 정렬
-                ]}>
-                  <View style={[
-                    styles.messageBubble, // 말풍선 기본 스타일
-                    item.sender === 'bot' ? styles.botBubble : styles.userBubble // 발신자에 따른 말풍선 스타일
-                  ]}>
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={item => item.id}
+              renderItem={({ item }) => (
+                <View style={[ styles.messageOuterContainer, item.sender === 'bot' ? styles.botRowContainer : styles.userRowContainer ]}>
+                  <View style={[ styles.messageBubble, item.sender === 'bot' ? styles.botBubble : styles.userBubble ]}>
                     <Text style={styles.messageText}>{item.text}</Text>
                   </View>
                 </View>
               )}
-              contentContainerStyle={styles.chatContainer} // FlatList 내부 컨텐츠 스타일
+              contentContainerStyle={styles.chatContainer}
             />
           </View>
 
-          {/* 진단이 완료되지 않았을 때 옵션 버튼 영역 */}
           {!finished && (
             <>
-              {/* 첫 번째 감정 선택 */}
               {!degreeSelected && !askingSecondEmotion && !askingPriorityQuestion && (
                 renderOptionButtons( availableEmotions, handleEmotionSelect, handleFullRestart, 'emo1' )
               )}
-              {/* 첫 번째 감정 정도 선택 */}
               {degreeSelected && !askingSecondEmotion && !askingPriorityQuestion && (
                 renderOptionButtons( [1, 2, 3, 4, 5, 6, 7, '다시'], handleDegreeSelect, handleFullRestart, 'deg1' )
               )}
-              {/* 두 번째 감정 선택 */}
               {!degreeSelected && askingSecondEmotion && !askingPriorityQuestion && (
                 renderOptionButtons( [...filterAvailableEmotions(), '없음'], handleEmotionSelect, handleReturnToSecondEmotionChoice, 'emo2' )
               )}
-              {/* 두 번째 감정 정도 선택 */}
               {degreeSelected && askingSecondEmotion && !askingPriorityQuestion && (
                 renderOptionButtons( [1, 2, 3, 4, 5, 6, 7, '다시'], handleDegreeSelect, handleReturnToSecondEmotionChoice, 'deg2' )
               )}
-              {/* 우선순위 감정 선택 */}
               {!degreeSelected && askingPriorityQuestion && (
-                // 옵션으로 첫번째 확정 감정과 현재 선택된 두번째 감정 전달
                 renderPriorityOptions( [firstEmotion, currentSelectedEmotion], handlePrioritySelect, 'priority' )
               )}
             </>
           )}
 
-          {/* 진단이 완료되었을 때 결과 보기 버튼 영역 */}
           {finished && (
             <View style={[styles.optionsContainer, styles.resultButtonContainer, { height: GRID_HEIGHT }]}>
               <TouchableOpacity
                 onPress={handleViewResult}
                 disabled={isSubmittingResult}
                 style={[
-                  styles.resultButtonActual, // 수정된 버튼 스타일
-                  isSubmittingResult && styles.disabledResultButtonActual // 비활성화 시 스타일
+                  styles.resultButtonActual,
+                  isSubmittingResult && styles.disabledResultButtonActual
                 ]}
-                activeOpacity={0.7} // 비활성화 아닐 때의 터치 투명도
+                activeOpacity={0.7}
               >
                 <Text style={styles.resultButtonText}>
                   {isSubmittingResult ? "처리 중..." : "결과 보기"}
@@ -520,125 +472,55 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
   );
 };
 
-// 스타일 정의
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#eef7ff' }, // 전체 화면 배경색
-  outerContainer: { flex: 1 }, // SafeArea 내부 전체 컨테이너
-  topSpacing: { height: 40 }, // 상단 여백
-  chatListContainer: { flex: 1 }, // 채팅 목록 영역이 남은 공간 차지
-  chatContainer: { paddingBottom: 10, paddingHorizontal: 10, flexGrow: 1, }, // FlatList 내부 패딩 및 컨텐츠 아래 정렬
-  messageOuterContainer: { flexDirection: 'row', marginVertical: 6, }, // 각 메시지 행
-  botRowContainer: { justifyContent: 'flex-start', alignSelf: 'flex-start', }, // 봇 메시지 왼쪽 정렬
-  userRowContainer: { justifyContent: 'flex-end', alignSelf: 'flex-end', }, // 사용자 메시지 오른쪽 정렬
-  messageBubble: { maxWidth: '75%', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18, }, // 말풍선 기본 스타일
-  botBubble: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 0, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 1, marginLeft: 5, }, // 봇 말풍선 스타일
-  userBubble: { backgroundColor: '#a8d8ff', borderTopRightRadius: 0, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 1, marginRight: 5, }, // 사용자 말풍선 스타일
-  messageText: { fontSize: 16, color: '#333', lineHeight: 22, textAlign: 'left', }, // 메시지 텍스트 스타일
-  optionsContainer: { // 옵션 버튼 영역 컨테이너
-    width: '100%',
-    paddingHorizontal: 15, // 좌우 패딩
-    paddingTop: 10, // 상단 패딩
-    paddingBottom: Platform.OS === 'ios' ? 25 : 15, // 하단 패딩 (iOS 홈 인디케이터 고려)
-    backgroundColor: '#eef7ff', // 배경색
-    justifyContent: 'center', // 내부 요소들 수직 중앙 정렬
+  safeArea: { flex: 1, backgroundColor: '#eef7ff' },
+  outerContainer: { flex: 1 },
+  topSpacing: { height: 40 },
+  chatListContainer: { flex: 1 },
+  chatContainer: { paddingBottom: 10, paddingHorizontal: 10, flexGrow: 1, },
+  messageOuterContainer: { flexDirection: 'row', marginVertical: 6, },
+  botRowContainer: { justifyContent: 'flex-start', alignSelf: 'flex-start', },
+  userRowContainer: { justifyContent: 'flex-end', alignSelf: 'flex-end', },
+  messageBubble: { maxWidth: '75%', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18, },
+  botBubble: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 0, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 1, marginLeft: 5, },
+  userBubble: { backgroundColor: '#a8d8ff', borderTopRightRadius: 0, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 1, marginRight: 5, },
+  messageText: { fontSize: 16, color: '#333', lineHeight: 22, textAlign: 'left', },
+  optionsContainer: {
+    width: '100%', paddingHorizontal: 15, paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 25 : 15,
+    backgroundColor: '#eef7ff', justifyContent: 'center',
   },
-  buttonRow: { // 옵션 버튼 행 (2개씩)
-    flexDirection: 'row',
-    width: '100%',
-    flex: 1, // 행이 높이를 균등하게 나눠가지도록
+  buttonRow: { flexDirection: 'row', width: '100%', flex: 1, },
+  buttonRowMargin: { marginBottom: 10, },
+  priorityButtonRow: { flexDirection: 'row', width: '100%', alignItems: 'center', flex: 1, justifyContent: 'center' },
+  optionButton: {
+    flex: 1, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#d0d0d0',
+    borderRadius: 8, alignItems: 'center', justifyContent: 'center',
+    marginHorizontal: 5, elevation: 1, shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 1,
+    minHeight: 45, paddingVertical: 12,
   },
-  buttonRowMargin: { marginBottom: 10, }, // 버튼 행 사이 간격
-  priorityButtonRow: { // 우선순위 선택 버튼 행
-    flexDirection: 'row',
-    width: '100%',
-    alignItems: 'center', // 내부 버튼들 수직 중앙 정렬
-    flex: 1,
-    justifyContent: 'center' // 버튼들을 중앙에 배치
+  optionButtonEmpty: {
+    flex: 1, backgroundColor: 'transparent', borderWidth: 0,
+    elevation: 0, shadowOpacity: 0, marginHorizontal: 5, minHeight: 45,
   },
-  optionButton: { // 일반 옵션 버튼
-    flex: 1, // 행 내에서 너비를 균등하게 나눠가지도록
-    backgroundColor: '#ffffff', // 배경색
-    borderWidth: 1,
-    borderColor: '#d0d0d0', // 테두리 색
-    borderRadius: 8, // 모서리 둥글게
-    alignItems: 'center', // 텍스트 수평 중앙 정렬
-    justifyContent: 'center', // 텍스트 수직 중앙 정렬
-    marginHorizontal: 5, // 버튼 좌우 간격
-    elevation: 1, // 안드로이드 그림자
-    shadowColor: '#000', // iOS 그림자
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    minHeight: 45, // 최소 높이
-    paddingVertical: 12, // 상하 패딩
+  priorityButtonWrapper: { flex: 0.5, marginHorizontal: 5, justifyContent: 'center', alignItems: 'center', },
+  priorityOptionButtonActual: {
+    width: '100%', backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#d0d0d0',
+    borderRadius: 8, alignItems: 'center', justifyContent: 'center',
+    elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1, shadowRadius: 1, paddingVertical: 12, minHeight: 45,
   },
-  optionButtonEmpty: { // 빈 공간 채우는 투명 버튼 스타일
-    flex: 1,
-    backgroundColor: 'transparent', // 배경 투명
-    borderWidth: 0, // 테두리 없음
-    elevation: 0,
-    shadowOpacity: 0,
-    marginHorizontal: 5,
-    minHeight: 45,
+  optionText: { fontSize: 16, color: '#333', fontWeight: '500', textAlign: 'center', },
+  resultButtonContainer: { justifyContent: 'center', alignItems: 'center', },
+  resultButtonActual: {
+    backgroundColor: '#2196F3', borderRadius: 10, paddingVertical: 18,
+    paddingHorizontal: 40, elevation: 3, shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 2,
+    minWidth: 150, alignItems: 'center', justifyContent: 'center',
   },
-  priorityButtonWrapper: { // 우선순위 버튼 감싸는 래퍼 (flex: 0.5 적용)
-    flex: 0.5, // 각 버튼이 너비의 절반 차지
-    marginHorizontal: 5,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  priorityOptionButtonActual: { // 우선순위 버튼 실제 스타일
-    width: '100%', // 래퍼 너비 꽉 채움
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#d0d0d0',
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    paddingVertical: 12,
-    minHeight: 45,
-  },
-  optionText: { // 옵션 버튼 텍스트
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  resultButtonContainer: { // 결과 보기 버튼 컨테이너
-    justifyContent: 'center', // 수직 중앙 정렬 (optionsContainer에서 이미 적용됨)
-    alignItems: 'center', // 수평 중앙 정렬 (TouchableOpacity를 중앙에 배치)
-  },
-  // resultButtonGradient 스타일은 삭제
-  resultButtonActual: { // "결과 보기" 버튼 (LinearGradient 대신 TouchableOpacity에 직접 적용)
-    backgroundColor: '#2196F3', // 설정 화면의 "날짜 넘기기" 버튼 색상
-    borderRadius: 10,
-    paddingVertical: 18,
-    paddingHorizontal: 40,
-    elevation: 3, // 안드로이드 그림자
-    shadowColor: '#000', // iOS 그림자
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    minWidth: 150, // 최소 너비
-    alignItems: 'center', // 텍스트 수평 중앙 정렬
-    justifyContent: 'center', // 텍스트 수직 중앙 정렬
-    // width: '80%', // 필요시 컨테이너 대비 너비 설정, 없으면 minWidth와 padding으로 결정
-  },
-  disabledResultButtonActual: { // 비활성화 시 "결과 보기" 버튼 스타일
-    backgroundColor: '#BDBDBD', // 비활성화 시 회색 배경
-  },
-  resultButtonText: { // 결과 보기 버튼 텍스트 (기존과 동일)
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  // disabledResultButton: { opacity: 0.6, }, // 이 스타일은 더 이상 직접 사용되지 않음
+  disabledResultButtonActual: { backgroundColor: '#BDBDBD', },
+  resultButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold', textAlign: 'center', },
 });
 
 export default SimpleDiagnosisScreen;
