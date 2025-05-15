@@ -237,15 +237,16 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
 
   // 두 번째 감정 선택 단계로 돌아가기 핸들러
   const handleReturnToSecondEmotionChoice = () => {
-    // 메시지 기록에서 첫 번째 감정 정도 선택 이후 메시지 제거
     setMessages(prev => {
         const firstEmotionConfirmationIndex = prev.findIndex(m => m.sender === 'user' && m.text === `${firstDegree}`);
-        // 해당 인덱스를 찾지 못하면 전체 재시작과 유사하게 동작 (안전 장치)
-        if (firstEmotionConfirmationIndex === -1) return [{ id: makeId(), sender: 'bot', text: '안녕하세요! 어떤 기분으로 하루를 보내셨나요?' }];
-        // 첫 번째 감정 정도 확인 메시지 다음 봇 메시지까지 유지
+        if (firstEmotionConfirmationIndex === -1) {
+            // 안전 장치: 첫 번째 감정 정도 확인 메시지를 찾지 못하면 전체 재시작과 유사하게 동작
+            return [{ id: makeId(), sender: 'bot', text: '안녕하세요! 어떤 기분으로 하루를 보내셨나요?' }];
+        }
+        // 첫 번째 감정 정도 확인 메시지 다음 봇 메시지(두 번째 감정 질문)까지만 유지
         const historyToKeep = prev.slice(0, firstEmotionConfirmationIndex + 2);
-        // 다시 질문하는 봇 메시지 추가
-        return [ ...historyToKeep, { id: makeId(), sender: 'bot', text: '혹시 오늘 또 다른 감정을 느끼진 않으셨나요? (다시 선택)' }, ];
+        // <<<< 수정된 부분: 새로운 봇 메시지를 추가하지 않음 >>>>
+        return historyToKeep;
     });
     // 두 번째 감정 관련 상태 초기화
     setCurrentSelectedEmotion(''); setSecondEmotion(''); setPrioritySelectedEmotion('');
