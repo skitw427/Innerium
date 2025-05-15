@@ -83,8 +83,26 @@ const CustomDayComponent = React.memo(({ date, state, marking, onPress, onLongPr
   
   const validPadding = typeof dayPaddingBottom === 'number' && !isNaN(dayPaddingBottom) ? dayPaddingBottom : MIN_MARGIN;
   const calculatedIconSize = Math.max(10, validPadding * 0.4); 
-  const iconBottomPosition = Math.max(0, (validPadding - calculatedIconSize) / 2);
 
+  // --- 아이콘 위치 조정 로직 (비율 기반) ---
+  // upwardOffsetRatio: 아이콘을 얼마나 위로 올릴지에 대한 비율입니다.
+  // 0.0 이면 기존 중앙 정렬에 가깝고, 값이 커질수록 아이콘이 위로 올라갑니다.
+  // 0.05 ~ 0.2 사이의 값을 사용해 보시는 것을 추천합니다. (예: 0.1은 패딩 높이의 10%만큼 더 올림)
+  const upwardOffsetRatio = 0.1; // <<< 이 값을 조절하여 아이콘 위치를 변경하세요.
+
+  // 1. 아이콘을 패딩 영역 내에 수직 중앙 정렬했을 때의 기본 bottom 값 계산
+  const centralBottomPosition = Math.max(0, (validPadding - calculatedIconSize) / 2);
+
+  // 2. 기본 중앙 위치에서 (패딩 높이 * upwardOffsetRatio) 만큼 추가로 올림
+  let newBottomPosition = centralBottomPosition + (validPadding * upwardOffsetRatio);
+
+  // 3. 아이콘이 패딩 영역의 상단을 넘지 않도록 최대 bottom 값을 계산
+  const maxPossibleBottom = Math.max(0, validPadding - calculatedIconSize);
+
+  // 4. 최종 bottom 값은 0 (패딩 바닥)과 maxPossibleBottom 사이로 제한
+  const iconBottomPosition = Math.max(0, Math.min(newBottomPosition, maxPossibleBottom));
+  // --- 아이콘 위치 조정 로직 끝 ---
+  
   let textStyle = [ styles.dayText, isDisabled && styles.disabledText, isAppToday && styles.todayText, ];
   if (marking?.customStyles?.text) { textStyle.push(marking.customStyles.text); }
   let wrapperStyle = [ styles.dayWrapper, { paddingBottom: validPadding }, ];
@@ -106,7 +124,7 @@ const CustomDayComponent = React.memo(({ date, state, marking, onPress, onLongPr
             { 
               width: calculatedIconSize, 
               height: calculatedIconSize, 
-              bottom: iconBottomPosition,
+              bottom: iconBottomPosition, // 계산된 비율 기반 bottom 값 적용
             }
           ]}
           resizeMode="contain"
