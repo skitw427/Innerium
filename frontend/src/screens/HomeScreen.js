@@ -921,7 +921,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   chatUserBubble: {
-    backgroundColor: '#dcf8c6', 
+    backgroundColor: '#dcf8c6',
     borderTopRightRadius: 0,
     alignSelf: 'flex-end',
   },
