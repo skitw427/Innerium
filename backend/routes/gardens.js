@@ -28,10 +28,10 @@ router.get('/current', authMiddleware, async (req, res, next) => {
 
   try {
     let user = await db.User.findByPk(userId, {
-      include: [ // 사용자의 현재 정원 정보를 함께 가져오기 위함
+      include: [
         {
           model: db.Garden,
-          as: 'currentGarden', // User 모델의 'currentGarden' 관계 별칭
+          as: 'currentGarden',
         },
       ],
     });
@@ -48,7 +48,6 @@ router.get('/current', authMiddleware, async (req, res, next) => {
       currentGarden = await db.Garden.create({
         user_id: userId,
         tree_level: 0, // 초기 나무 레벨
-        // emotion_score 등 다른 초기값 설정 가능
       });
       // 사용자의 current_garden_id 업데이트
       await user.update({ current_garden_id: currentGarden.garden_id });
@@ -126,7 +125,7 @@ router.post(
   async (req, res, next) => {
     const userId = req.user.user_id;
     const { garden_id } = req.params;
-    const { name } = req.body;
+    const { name, completedDate } = req.body;
 
     if (!name || typeof name !== 'string' || name.trim() === '') {
       if (req.file && req.file.path) {
@@ -192,7 +191,8 @@ router.post(
 
       // 정원 정보 업데이트 (최종 파일명 사용)
       garden.name = name.trim();
-      garden.completed_at = new Date();
+      // garden.completed_at = new Date();
+      garden.completed_at = completedDate;
       // garden.snapshot_image_url = finalFilename; // 최종 파일명 저장
       await garden.save({ transaction });
 
