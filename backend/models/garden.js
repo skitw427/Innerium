@@ -1,6 +1,7 @@
 'use strict';
 const {
-  Model
+  Model,
+  Sequelize
 } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Garden extends Model {
@@ -59,12 +60,12 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 0
     },
     started_at: {
-      type: DataTypes.DATE,
+      type: DataTypes.DATEONLY,
       allowNull: false,
-      defaultValue: DataTypes.NOW
+      defaultValue: Sequelize.fn('CURRENT_DATE')
     },
     completed_at: {
-      type: DataTypes.DATE,
+      type: DataTypes.DATEONLY,
       allowNull: true
     },
     snapshot_image_url: {
