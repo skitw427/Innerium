@@ -12,7 +12,8 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+// LinearGradient는 "결과 보기" 버튼에 더 이상 사용되지 않으므로 제거합니다.
+// import { LinearGradient } from 'expo-linear-gradient'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAppCurrentDate, formatDateToYYYYMMDD } from '../utils/dateUtils';
 
@@ -500,19 +501,16 @@ const SimpleDiagnosisScreen = ({ navigation }) => {
             <View style={[styles.optionsContainer, styles.resultButtonContainer, { height: GRID_HEIGHT }]}>
               <TouchableOpacity
                 onPress={handleViewResult}
-                disabled={isSubmittingResult} // 처리 중일 때 비활성화
-                style={isSubmittingResult ? styles.disabledResultButton : {}} // 비활성화 시 스타일 적용
-                activeOpacity={isSubmittingResult ? 1 : 0.7} // 비활성화 시 터치 효과 없앰
+                disabled={isSubmittingResult}
+                style={[
+                  styles.resultButtonActual, // 수정된 버튼 스타일
+                  isSubmittingResult && styles.disabledResultButtonActual // 비활성화 시 스타일
+                ]}
+                activeOpacity={0.7} // 비활성화 아닐 때의 터치 투명도
               >
-                {/* 그라데이션 배경 버튼 */}
-                <LinearGradient
-                  colors={isSubmittingResult ? ['#BDBDBD', '#9E9E9E'] : ['#4CAF50', '#8BC34A']} // 처리 중일 때 회색 그라데이션
-                  style={styles.resultButtonGradient}
-                >
-                  <Text style={styles.resultButtonText}>
-                    {isSubmittingResult ? "처리 중..." : "결과 보기"}
-                  </Text>
-                </LinearGradient>
+                <Text style={styles.resultButtonText}>
+                  {isSubmittingResult ? "처리 중..." : "결과 보기"}
+                </Text>
               </TouchableOpacity>
             </View>
           )}
@@ -612,29 +610,35 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   resultButtonContainer: { // 결과 보기 버튼 컨테이너
-    justifyContent: 'center', // 수직 중앙 정렬
-    alignItems: 'center', // 수평 중앙 정렬
+    justifyContent: 'center', // 수직 중앙 정렬 (optionsContainer에서 이미 적용됨)
+    alignItems: 'center', // 수평 중앙 정렬 (TouchableOpacity를 중앙에 배치)
   },
-  resultButtonGradient: { // 결과 보기 그라데이션 버튼
+  // resultButtonGradient 스타일은 삭제
+  resultButtonActual: { // "결과 보기" 버튼 (LinearGradient 대신 TouchableOpacity에 직접 적용)
+    backgroundColor: '#2196F3', // 설정 화면의 "날짜 넘기기" 버튼 색상
     borderRadius: 10,
-    paddingVertical: 18, // 상하 패딩 크게
-    paddingHorizontal: 40, // 좌우 패딩 크게
-    elevation: 3,
-    shadowColor: '#000',
+    paddingVertical: 18,
+    paddingHorizontal: 40,
+    elevation: 3, // 안드로이드 그림자
+    shadowColor: '#000', // iOS 그림자
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
     minWidth: 150, // 최소 너비
-    alignItems: 'center', // 텍스트 중앙 정렬
-    justifyContent: 'center',
+    alignItems: 'center', // 텍스트 수평 중앙 정렬
+    justifyContent: 'center', // 텍스트 수직 중앙 정렬
+    // width: '80%', // 필요시 컨테이너 대비 너비 설정, 없으면 minWidth와 padding으로 결정
   },
-  resultButtonText: { // 결과 보기 버튼 텍스트
+  disabledResultButtonActual: { // 비활성화 시 "결과 보기" 버튼 스타일
+    backgroundColor: '#BDBDBD', // 비활성화 시 회색 배경
+  },
+  resultButtonText: { // 결과 보기 버튼 텍스트 (기존과 동일)
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
     textAlign: 'center',
   },
-  disabledResultButton: { opacity: 0.6, }, // 비활성화 시 투명도 조절
+  // disabledResultButton: { opacity: 0.6, }, // 이 스타일은 더 이상 직접 사용되지 않음
 });
 
 export default SimpleDiagnosisScreen;
