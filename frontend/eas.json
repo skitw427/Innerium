@@ -1,49 +1,27 @@
 {
-  "cli": {
-    "version": ">= 7.0.0", // 최신 EAS CLI 버전 권장 (기존 16.6.1에서 업데이트)
-    "appVersionSource": "remote" // 앱 버전 소스를 원격(Expo 서버)으로 사용
-  },
-  "build": {
-    "development": {
-      "developmentClient": true,
-      "distribution": "internal",
-      "android": { // development 프로필에도 android 섹션 추가 (일관성 및 명시성)
-        "buildType": "apk" // 개발 클라이언트는 보통 APK
-      },
-      "ios": { // development 프로필에 ios 섹션 추가 (필요하다면)
-        // "simulator": true
-      }
-    },
-    "preview": {
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk" // preview 프로필은 APK로 유지
-      },
-      "ios": {
-        // "enterpriseProvisioning": "adhoc"
-      }
-    },
-    "production": {
-      "distribution": "store", // 스토어 배포용
-      "android": {
-        "buildType": "apk" // 요청하신 대로 production 프로필의 Android 빌드 타입을 APK로 변경
-      },
-      "ios": {
-        // "autoIncrement": "version"
-      }
-    }
-  },
-  "submit": {
-    "production": {
-      // Android 제출 설정 (필요시 구체화)
-      // "android": {
-      //   "serviceAccountKeyPath": "./path/to/your/google-service-account.json",
-      //   "track": "internal"
-      // },
-      // iOS 제출 설정 (필요시 구체화)
-      // "ios": {
-      //   "appleId": "your-apple-id@example.com"
-      // }
-    }
-  }
+"cli": {
+"version": ">= 16.6.1",
+"appVersionSource": "remote"
+},
+"build": {
+"development": {
+"developmentClient": true,
+"distribution": "internal"
+},
+"preview": {
+"distribution": "internal",
+"android": {
+"buildType": "apk"
+}
+},
+"production": {
+"distribution": "store",
+"android": {
+"buildType": "apk"
+}
+}
+},
+"submit": {
+"production": {}
+}
 }

@@ -22,7 +22,6 @@
         "backgroundColor": "#ffffff"
       },
       "softwareKeyboardLayoutMode": "resize",
-      "useNextNotificationsApi": true,
       "package": "com.yourcompany.frontend"
     },
     "web": {
