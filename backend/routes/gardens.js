@@ -25,6 +25,7 @@ const calculateSkyColor = (flowers) => {
  */
 router.get('/current', authMiddleware, async (req, res, next) => {
   const userId = req.user.user_id;
+  const { currentDate } = req.query;
 
   try {
     let user = await db.User.findByPk(userId, {
@@ -40,18 +41,54 @@ router.get('/current', authMiddleware, async (req, res, next) => {
       return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
     }
 
-    let currentGarden = user.currentGarden;
-    let isNewGarden = false;
+    currentGarden = user.currentGarden;
 
-    // 현재 진행 중인 정원이 없으면 새로 생성
-    if (!currentGarden) {
-      currentGarden = await db.Garden.create({
-        user_id: userId,
-        tree_level: 0, // 초기 나무 레벨
-      });
-      // 사용자의 current_garden_id 업데이트
-      await user.update({ current_garden_id: currentGarden.garden_id });
-      isNewGarden = true;
+    if (user.currentGarden && user.currentGarden.completed_at) {
+      const completedDateValue = user.currentGarden.completed_at;
+  
+      const [currentYear, currentMonth, currentDay] = currentDate.split('-').map(Number);
+      const currentDateObj = new Date(currentYear, currentMonth - 1, currentDay);
+      currentDateObj.setHours(0, 0, 0, 0)
+  
+      let completedDateObj;
+      if (typeof completedDateValue === 'string') {
+        const [compYear, compMonth, compDay] = completedDateValue.split('-').map(Number);
+        completedDateObj = new Date(compYear, compMonth - 1, compDay);
+      } else if (completedDateValue instanceof Date) {
+        
+        completedDateObj = new Date(
+          completedDateValue.getFullYear(),
+          completedDateValue.getMonth(),
+          completedDateValue.getDate()
+        );
+      } else {
+        console.error('Invalid completedDate format:', completedDateValue);
+      }
+      
+      if (completedDateObj) {
+          completedDateObj.setHours(0, 0, 0, 0);
+  
+          const completedDatePlusOneDay = new Date(completedDateObj);
+          completedDatePlusOneDay.setDate(completedDateObj.getDate() + 1);
+  
+          if (currentDateObj.getTime() >= completedDatePlusOneDay.getTime()) {
+            console.log(`${currentDate}는 ${completedDateValue}보다 하루 이상 큽니다. 새로운 정원을 생성합니다.`);
+            currentGarden = await db.Garden.create({
+              user_id: userId,
+              tree_level: 0, // 초기 나무 레벨
+            });
+            await user.update({ current_garden_id: currentGarden.garden_id });
+
+          } else {
+            console.log(`${currentDate}는 ${completedDateValue}보다 하루 이상 크지 않습니다.`);
+          }
+      }
+    } else if (!user.currentGarden){
+        currentGarden = await db.Garden.create({
+          user_id: userId,
+          tree_level: 0,
+        });
+        await user.update({ current_garden_id: currentGarden.garden_id });
     }
 
     // 정원에 속한 꽃들 정보 가져오기
@@ -155,13 +192,11 @@ router.post(
       });
 
       if (!garden) {
-        await fs.unlink(tempFilePath); // 임시 파일 삭제
         await transaction.rollback();
         return res.status(404).json({ message: '해당 정원을 찾을 수 없거나 권한이 없습니다.' });
       }
 
       if (garden.completed_at) {
-        await fs.unlink(tempFilePath); // 임시 파일 삭제
         await transaction.rollback();
         return res.status(400).json({ message: '이미 완성된 정원입니다.' });
       }
@@ -196,42 +231,42 @@ router.post(
       // garden.snapshot_image_url = finalFilename; // 최종 파일명 저장
       await garden.save({ transaction });
 
-      const user = await db.User.findByPk(userId, { transaction });
-      if (user && user.current_garden_id === parseInt(garden_id, 10)) {
-        await user.update({ current_garden_id: null }, { transaction });
-      }
+      // const user = await db.User.findByPk(userId, { transaction });
+      // if (user && user.current_garden_id === parseInt(garden_id, 10)) {
+      //   await user.update({ current_garden_id: null }, { transaction });
+      // }
 
       await transaction.commit();
+
+      let finalCompletedAtISO = null;
+      if (garden.completed_at && typeof garden.completed_at === 'string') {
+        console.log("[Backend] completed_at === String")
+        const dateObj = new Date(garden.completed_at);
+        if (!isNaN(dateObj.getTime())) {
+          finalCompletedAtISO = dateObj.toISOString();
+          console.log("[Backend] finalCompletedAtISO:", finalCompletedAtISO, typeof(finalCompletedAtISO))
+        } else {
+          console.warn(`Could not parse completed_at string "${garden.completed_at}" into a valid Date.`);
+        }
+      } else if (garden.completed_at instanceof Date) {
+        finalCompletedAtISO = garden.completed_at.toISOString();
+      }
 
       res.status(200).json({
         garden_id: garden.garden_id.toString(),
         name: garden.name,
-        completed_at: garden.completed_at.toISOString(),
-        // snapshot_image_url: `/api/gardens/snapshot/${finalFilename}`, // 최종 파일명으로 URL 생성
+        completed_at: finalCompletedAtISO
       });
 
     } catch (error) {
-      if (transaction) await transaction.rollback();
-      try {
-        await fs.access(finalFilePath); // 최종 파일 경로가 존재하는지 (이름 변경 후 에러 시)
-        await fs.unlink(finalFilePath);
-        console.log(`Cleaned up final file on error: ${finalFilePath}`);
-      } catch (e) {
-        // finalFilePath가 없으면 tempFilePath를 삭제 시도
+      if (transaction && transaction.finished !== 'commit' && transaction.finished !== 'rollback') { // 롤백/커밋되지 않은 경우만
         try {
-            await fs.access(tempFilePath);
-            await fs.unlink(tempFilePath);
-            console.log(`Cleaned up temp file on error: ${tempFilePath}`);
-        } catch (e2) {
-            // 둘 다 없거나 삭제 실패해도 일단 로깅만
-            console.error("Error cleaning up snapshot file on main error:", e, e2);
+          await transaction.rollback();
+        } catch (rollbackError) {
+          console.error('Error during rollback:', rollbackError);
         }
       }
-
-      console.error('POST /gardens/:garden_id/complete Error:', error);
-      if (error instanceof multer.MulterError) {
-        return res.status(400).json({ message: error.message });
-      }
+      console.error('POST /gardens/:garden_id/complete final Error:', error);
       next(error);
     }
   }

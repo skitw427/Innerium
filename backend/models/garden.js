@@ -1,7 +1,6 @@
 'use strict';
 const {
-  Model,
-  Sequelize
+  Model
 } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Garden extends Model {
@@ -62,7 +61,7 @@ module.exports = (sequelize, DataTypes) => {
     started_at: {
       type: DataTypes.DATEONLY,
       allowNull: false,
-      defaultValue: Sequelize.fn('CURRENT_DATE')
+      defaultValue: new Date()
     },
     completed_at: {
       type: DataTypes.DATEONLY,
