@@ -32,15 +32,14 @@ const emotionKeyToTypeIdMap = Object.entries(emotionTypeIdToClientMap).reduce((a
 export const GardenContext = createContext();
 
 export const GardenProvider = ({ children }) => {
-  const { isLoggedIn, token } = useAuth(); // token은 인터셉터에서 사용되므로 isLoggedIn이 중요
+  const { isLoggedIn, token } = useAuth();
 
-  // --- 기존 상태 (서버 데이터로 초기화될 예정) ---
   const [placedFlowers, setPlacedFlowers] = useState([]); // 꽃 배열 상태
-
-  // --- 새롭게 추가/분리된 상태 ---
   const [currentGardenDetails, setCurrentGardenDetails] = useState(null); // 꽃을 제외한 정원 정보
   const [isLoadingGarden, setIsLoadingGarden] = useState(false); // 초기 로딩은 false, fetch 시작 시 true
+  const [isCompletingGarden, setIsCompletingGarden] = useState(false);
   const [gardenError, setGardenError] = useState(null);
+  const [isNewGarden, setIsNewGarden] = useState(false);
 
   useEffect(() => {
     const loadInitialDataFromStorage = async () => {
@@ -79,8 +78,11 @@ export const GardenProvider = ({ children }) => {
       setIsLoadingGarden(true);
       setGardenError(null);
       try {
+        const currentAppDateForStorage = await getAppCurrentDate();
+        const formattedCurrentAppDate = formatDateToYYYYMMDD(currentAppDateForStorage);
+
         console.log('[GardenContext] Fetching current garden data from API...');
-        const response = await getCurrentGarden(); // API 호출
+        const response = await getCurrentGarden(formattedCurrentAppDate); // API 호출
         const apiGardenData = response.data; // CurrentGardenResDTO
 
         const { flowers: apiFlowers, ...apiDetails } = apiGardenData;
@@ -125,7 +127,12 @@ export const GardenProvider = ({ children }) => {
 
         console.log('[GardenContext] API data loaded and transformed. Details:', apiDetails, 'Transformed Flowers count:', transformedFlowers.length);
         console.log('[GardenContext] Sample transformed flower:', JSON.stringify(transformedFlowers[0], null, 2));
-
+        
+        setIsNewGarden(false);
+        if (transformedFlowers.length === 0) {
+          const lastFlowers = AsyncStorage.getItem(PLACED_FLOWERS_KEY);
+          if (lastFlowers.length !== 0) setIsNewGarden(true);
+        }
 
         // 3. 업데이트된 데이터를 AsyncStorage에 저장
         try {
@@ -136,11 +143,10 @@ export const GardenProvider = ({ children }) => {
         } catch (storageError) {
           console.error('[GardenContext] Failed to save transformed API data to AsyncStorage:', storageError);
         }
-
-        const currentAppDateForStorage = await getAppCurrentDate();
-        const formattedCurrentAppDate = formatDateToYYYYMMDD(currentAppDateForStorage);
-
-        await AsyncStorage.setItem(LAST_DIAGNOSIS_DATE_KEY, formattedCurrentAppDate);
+        
+        if (transformedFlowers[-1]) {
+          await AsyncStorage.setItem(LAST_DIAGNOSIS_DATE_KEY, transformedFlowers[-1].creationDate);
+        }
         await AsyncStorage.setItem(CALENDAR_SCREEN_INITIAL_SYNC_DONE_KEY, 'true');
 
       } catch (err) {
@@ -153,14 +159,14 @@ export const GardenProvider = ({ children }) => {
         setIsLoadingGarden(false);
       }
     } else {
-      // 로그인되지 않은 경우 모든 관련 상태 및 AsyncStorage 데이터 클리어 (선택적)
+      // 로그인되지 않은 경우 모든 관련 상태 및 AsyncStorage 데이터 클리어
       setCurrentGardenDetails(null);
       setPlacedFlowers([]);
       setIsLoadingGarden(false);
       setGardenError(null);
       try {
-        await AsyncStorage.removeItem(ASYNC_STORAGE_GARDEN_DETAILS_KEY);
-        await AsyncStorage.removeItem(ASYNC_STORAGE_PLACED_FLOWERS_KEY);
+        await AsyncStorage.removeItem(GARDEN_DETAILS_KEY);
+        await AsyncStorage.removeItem(PLACED_FLOWERS_KEY);
         console.log('[GardenContext] User not logged in or logged out, cleared garden data from AsyncStorage.');
       } catch (clearError) {
         console.error('[GardenContext] Failed to clear AsyncStorage:', clearError);
@@ -180,9 +186,14 @@ export const GardenProvider = ({ children }) => {
     setIsCompletingGarden(true); // 정원 완성 처리 중 로딩 상태 시작
     setGardenError(null);
     try {
-      console.log(`[GardenContext] Attempting to complete garden ID: ${gardenId} with name: ${gardenName}`);
+      const gardenDataForCompletion = {
+        name: gardenName,
+        completedDate: completedDate
+      };
+    
 
-      const response = await completeGardenApiCall(gardenId, gardenName, completedDate);
+      console.log(`[GardenContext] Attempting to complete garden ID: ${gardenId} with name: ${gardenName}`);
+      const response = await completeGardenApiCall(gardenId, gardenDataForCompletion);
       console.log('[GardenContext] Garden completed successfully on server:', response.data);
 
       await fetchCurrentGarden();
@@ -223,9 +234,11 @@ export const GardenProvider = ({ children }) => {
     addFlower,
     currentGardenDetails,
     isLoadingGarden,
+    isCompletingGarden,
     gardenError,
     refreshCurrentGarden: fetchCurrentGarden,
     completeGarden,
+    isNewGarden,
   };
 
   return (

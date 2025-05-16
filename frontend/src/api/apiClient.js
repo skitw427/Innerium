@@ -232,7 +232,7 @@ export const updateUserSettings = (settingsData) => {
  * 현재 진행 중인 정원 정보 불러오기
  * [GET] /gardens/current
  * 요청 헤더: Authorization: Bearer <user_token> (요청 인터셉터에서 자동 추가)
- * 요청 본문: 없음
+ * 요청 파라미터: currentDate: string
  * 성공 응답 본문(CurrentGardenResDTO): {
  *   garden_id: string, // 서버에서 관리하는 현재 정원의 ID
  *   tree_level: number, // 현재 나무 레벨 (int)
@@ -253,8 +253,12 @@ export const updateUserSettings = (settingsData) => {
  * }
  * @returns {Promise<import("axios").AxiosResponse<CurrentGardenResDTO>>} CurrentGardenResDTO 포함 응답
  */
-export const getCurrentGarden = () => {
-  return apiClient.get('/gardens/current');
+export const getCurrentGarden = (currentDateString) => {
+  return apiClient.get('/gardens/current', {
+    params: {
+      currentDate: currentDateString
+    }
+  });
 };
 
 /**

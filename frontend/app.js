@@ -39,26 +39,44 @@ const AppContent = () => {
 const MainApp = () => {
   const { isLoadingGarden, gardenError, refreshCurrentGarden } = useGarden();
 
-  if (isLoadingGarden) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#2ECC71" />
-        <Text style={styles.statusText}>정원 정보를 불러오는 중...</Text>
-      </View>
-    );
-  }
+  // if (isLoadingGarden) {
+  //   return (
+  //     <View style={styles.container}>
+  //       <ActivityIndicator size="large" color="#2ECC71" />
+  //       <Text style={styles.statusText}>정원 정보를 불러오는 중...</Text>
+  //     </View>
+  //   );
+  // }
 
-  if (gardenError) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>정원 정보를 가져오지 못했습니다.</Text>
-        <Text style={styles.infoText}>{gardenError}</Text>
-        {/* 수정된 부분: 불필요한 중괄호와 화살표 함수 제거 */}
-        <Button title="다시 시도" onPress={refreshCurrentGarden} />
-      </View>
-    );
-  }
-  return <AppNavigator />;
+  // if (gardenError) {
+  //   return (
+  //     <View style={styles.container}>
+  //       <Text style={styles.errorText}>정원 정보를 가져오지 못했습니다.</Text>
+  //       <Text style={styles.infoText}>{gardenError}</Text>
+  //       {/* 수정된 부분: 불필요한 중괄호와 화살표 함수 제거 */}
+  //       <Button title="다시 시도" onPress={refreshCurrentGarden} />
+  //     </View>
+  //   );
+  // }
+  // return <AppNavigator />;
+  return (
+    <>
+      <AppNavigator />
+      {isLoadingGarden && (
+        <View style={[styles.container, styles.loadingOverlay]}>
+          <ActivityIndicator size="large" color="#2ECC71" />
+          <Text style={styles.statusText}>정원 정보를 불러오는 중...</Text>
+        </View>
+      )}
+      {gardenError && (
+        <View style={[styles.container, styles.errorOverlay]}>
+          <Text style={styles.errorText}>정원 정보를 가져오지 못했습니다.</Text>
+          <Text style={styles.infoText}>{gardenError}</Text>
+          <Button title="다시 시도" onPress={refreshCurrentGarden} />
+        </View>
+      )}
+    </>
+  );
 };
 
 export default function App() {

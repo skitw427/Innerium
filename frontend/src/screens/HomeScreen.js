@@ -56,14 +56,15 @@ const GENERIC_ALERT_POPUP_HEIGHT_RATIO = 0.35;
 
 const HomeScreen = ({ navigation, route }) => {
   const {
-      currentGardenDetails,
       placedFlowers, // GardenContext에서 오는 꽃 목록
       setPlacedFlowers,
+      currentGardenDetails,
       isLoadingGarden,    // GardenContext의 초기 정원 로딩 상태
       isCompletingGarden, // GardenContext의 정원 완성 API 호출 중 로딩 상태
       gardenError,
       refreshCurrentGarden,
       completeGarden,
+      isNewGarden
     } = useGarden();
 
   const { isTransitioning, handleNavigate } = useScreenTransition();
@@ -81,6 +82,7 @@ const HomeScreen = ({ navigation, route }) => {
   const [showEmotionCheckButton, setShowEmotionCheckButton] = useState(true);
   // const [isGardenFull, setIsGardenFull] = useState(false);
   const [isGardenFull, setIsGardenFull] = useState(placedFlowers.length >= MAX_FLOWERS);
+  const [isGardenCompleted, setIsGardenCompleted] = useState(true);
   const gardenViewRef = useRef();
   const [currentGardenSnapshotTaken, setCurrentGardenSnapshotTaken] = useState(false);
   const [isFlowerInfoModalVisible, setIsFlowerInfoModalVisible] = useState(false);
@@ -94,7 +96,6 @@ const HomeScreen = ({ navigation, route }) => {
   const [isGardenResetAlertVisible, setIsGardenResetAlertVisible] = useState(false);
   const [gardenResetAlertMessage, setGardenResetAlertMessage] = useState("새로운 정원을 가꿀 시간입니다!");
   const [isProcessingDiagnosis, setIsProcessingDiagnosis] = useState(false);
-
 
   const topSpacerHeight = windowHeight * TOP_SPACER_RATIO;
   const treeContainerHeight = windowHeight * TREE_CONTAINER_AREA_RATIO;
@@ -119,12 +120,26 @@ const HomeScreen = ({ navigation, route }) => {
     };
   }, [windowWidth, windowHeight]);
 
+  useEffect(() => {
+    console.log("HomeScreen useEffect - currentGardenDetails updated:", currentGardenDetails);
+    if (currentGardenDetails && currentGardenDetails.is_complete) {
+      setIsGardenCompleted(true);
+    }
+    else setIsGardenCompleted(false);
+  }, [currentGardenDetails]);
 
   useEffect(() => {
     if (isNewAccountJustCreated) {
       Alert.alert("환영합니다!", "새로운 계정이 생성되었습니다!", [{ text: "확인", onPress: () => clearNewAccountFlag() }], { cancelable: false });
     }
   }, [isNewAccountJustCreated, clearNewAccountFlag]);
+
+  // useEffect(() => {
+  //   if (isNewGarden) {
+  //     setIsGardenResetAlertVisible(true);
+  //     setShowEmotionCheckButton(true);
+  //   }
+  // }, [isNewGarden, refreshCurrentGarden]);
 
   // useEffect(() => {
   //   const loadInitialState = async () => {
@@ -192,18 +207,28 @@ const HomeScreen = ({ navigation, route }) => {
   //   }
   // }, [isGardenFull, currentGardenSnapshotTaken, isLoadingFlowers, captureAndSaveGarden]);
 
+  // 정원 완성 처리
   useEffect(() => {
       const handleCompleteGarden = async () => {
-      if (isGardenFull) {
+      console.log("isGardenFull:", isGardenFull);
+      console.log("isGardenCompleted", isGardenCompleted);
+      if (isGardenFull && !isGardenCompleted) {
+        if (!currentGardenDetails?.garden_id) {
+              Alert.alert("오류", "현재 정원 정보를 찾을 수 없습니다."); setIsGardenNameModalVisible(false); return;
+        }
+        const currentDateObj = await getAppCurrentDate();
+        const currentDateFormatted = formatDateToYYYYMMDD(currentDateObj);
+        const name = currentGardenDetails.garden_id + String(currentDateFormatted);
+
         try {
           console.log('[HomeScreen] Garden is complete, saving garden data to server...');
-          await completeGarden(); // 서버 데이터 새로고침 (꽃 심기는 서버에서 처리됨)
+          await completeGarden(currentGardenDetails.garden_id, name, currentDateFormatted); // 서버 데이터 새로고침 (꽃 심기는 서버에서 처리됨)
           console.log('[HomeScreen] Garden data saved to server.');
-
-          setResultModalMessage(diagnosisResult);
-          setResultModalImage(flowerImgModal);
-          setResultModalEmotionIcon(emotionIconModal);
-          setIsResultModalVisible(true);
+          if (isResultModalVisible) {
+            setPendingGardenCompletionAlert(true);
+          } else {
+            setIsGardenCompleteAlertVisible(true);
+          }
         } catch (error) {
           console.error('[HomeScreen] Error saving the completed garden:', error);
           Alert.alert("오류", gardenError || "정원 완성을 처리하는 중 문제가 발생했습니다.");
@@ -214,7 +239,7 @@ const HomeScreen = ({ navigation, route }) => {
     if (!isLoadingGarden && !isCompletingGarden && !isProcessingDiagnosis && !isResultModalVisible) {
       handleCompleteGarden();
     }
-  }, [isGardenFull, isResultModalVisible, isLoadingGarden, isProcessingDiagnosis]);
+  }, [isGardenFull, isResultModalVisible, isLoadingGarden]);
 
   useEffect(() => {
     if (!isResultModalVisible && pendingGardenCompletionAlert) {
@@ -239,19 +264,19 @@ const HomeScreen = ({ navigation, route }) => {
         let gardenWasReset = false;
         if (isGardenFull && currentGardenSnapshotTaken) {
           try {
-            const lastKnownDateForGarden = await AsyncStorage.getItem(LAST_DIAGNOSIS_DATE_KEY);
-            const currentAppDateObj = await getAppCurrentDate();
-            const currentAppDateFormatted = formatDateToYYYYMMDD(currentAppDateObj);
-            if (lastKnownDateForGarden && lastKnownDateForGarden !== currentAppDateFormatted) {
-              setPlacedFlowers([]);
-              setCurrentGardenSnapshotTaken(false);
-              setIsGardenFull(false);
-              await AsyncStorage.removeItem(PLACED_FLOWERS_KEY);
-              await AsyncStorage.setItem(CURRENT_GARDEN_SNAPSHOT_TAKEN_KEY, 'false');
-              await AsyncStorage.removeItem(LAST_DIAGNOSIS_DATE_KEY);
-              gardenWasReset = true;
-              setIsGardenResetAlertVisible(true);
-            }
+            // const lastKnownDateForGarden = await AsyncStorage.getItem(LAST_DIAGNOSIS_DATE_KEY);
+            // const currentAppDateObj = await getAppCurrentDate();
+            // const currentAppDateFormatted = formatDateToYYYYMMDD(currentAppDateObj);
+            // if (lastKnownDateForGarden && lastKnownDateForGarden !== currentAppDateFormatted) {
+            //   setPlacedFlowers([]);
+            //   setCurrentGardenSnapshotTaken(false);
+            //   setIsGardenFull(false);
+            //   await AsyncStorage.removeItem(PLACED_FLOWERS_KEY);
+            //   await AsyncStorage.setItem(CURRENT_GARDEN_SNAPSHOT_TAKEN_KEY, 'false');
+            //   await AsyncStorage.removeItem(LAST_DIAGNOSIS_DATE_KEY);
+            //   gardenWasReset = true;
+            //   setIsGardenResetAlertVisible(true);
+            // }
           } catch (error) {
             console.error('[HomeScreen] Error in resetting garden logic on date change:', error);
           }
@@ -304,6 +329,16 @@ const HomeScreen = ({ navigation, route }) => {
           setResultModalImage(flowerImgModal);
           setResultModalEmotionIcon(emotionIconModal);
           setIsResultModalVisible(true);
+
+          const currentDateObj = await getAppCurrentDate(); // 유틸리티 함수 사용
+          const currentDateFormatted = formatDateToYYYYMMDD(currentDateObj); // 유틸리티 함수 사용
+          await AsyncStorage.setItem(LAST_DIAGNOSIS_DATE_KEY, currentDateFormatted);
+          setShowEmotionCheckButton(false);
+
+
+          setIsGardenFull(placedFlowers.length >= MAX_FLOWERS);
+
+
         } catch (error) {
           console.error('[HomeScreen] Error processing diagnosis result or refreshing garden:', error);
           Alert.alert("오류", gardenError || "진단 결과를 처리하는 중 문제가 발생했습니다.");
@@ -313,11 +348,13 @@ const HomeScreen = ({ navigation, route }) => {
       }
     };
 
+    
+
     // 초기 로딩이나 다른 처리 중이 아닐 때만 실행
-    if (!isLoadingGarden && !isCompletingGarden && !isProcessingDiagnosis && route.params?.diagnosisResult) {
+    if (!isLoadingGarden && !isCompletingGarden && route.params?.diagnosisResult) {
       handleDiagnosisParams();
     }
-  }, [route.params, navigation, refreshCurrentGarden, isLoadingGarden, isCompletingGarden, isProcessingDiagnosis, gardenError]);
+  }, [route.params]);
 
   // useEffect(() => {
   //   if (route.params?.diagnosisResult && route.params?.emotionKey && !isLoadingFlowers && Array.isArray(placedFlowers)) {
