@@ -36,7 +36,7 @@ export const GardenProvider = ({ children }) => {
 
   const [placedFlowers, setPlacedFlowers] = useState([]); // 꽃 배열 상태
   const [currentGardenDetails, setCurrentGardenDetails] = useState(null); // 꽃을 제외한 정원 정보
-  const [isLoadingGarden, setIsLoadingGarden] = useState(false); // 초기 로딩은 false, fetch 시작 시 true
+  const [isLoadingGarden, setIsLoadingGarden] = useState(true); // 초기 로딩은 false, fetch 시작 시 true
   const [isCompletingGarden, setIsCompletingGarden] = useState(false);
   const [gardenError, setGardenError] = useState(null);
   const [isNewGarden, setIsNewGarden] = useState(false);
@@ -44,7 +44,7 @@ export const GardenProvider = ({ children }) => {
   useEffect(() => {
     const loadInitialDataFromStorage = async () => {
       if (isLoggedIn) { // 로그인 상태일 때만 시도
-        setIsLoadingGarden(true); // 초기 로딩 시작 (선택적)
+        setIsLoadingGarden(true); // 초기 로딩 시작
         try {
           const detailsString = await AsyncStorage.getItem(GARDEN_DETAILS_KEY);
           const flowersString = await AsyncStorage.getItem(PLACED_FLOWERS_KEY);
@@ -86,6 +86,11 @@ export const GardenProvider = ({ children }) => {
         const apiGardenData = response.data; // CurrentGardenResDTO
 
         const { flowers: apiFlowers, ...apiDetails } = apiGardenData;
+        setIsNewGarden(false);
+        if(apiDetails.isNewGarden) {
+          setIsNewGarden(true);
+          console.log("isNewGarden set true");
+        }
 
         // 1. API 응답을 클라이언트 형식으로 변환
         const transformedFlowers = (apiFlowers || []).map(apiFlower => {
@@ -126,13 +131,13 @@ export const GardenProvider = ({ children }) => {
         setPlacedFlowers(transformedFlowers);
 
         console.log('[GardenContext] API data loaded and transformed. Details:', apiDetails, 'Transformed Flowers count:', transformedFlowers.length);
-        console.log('[GardenContext] Sample transformed flower:', JSON.stringify(transformedFlowers[0], null, 2));
+        // console.log('[GardenContext] Sample transformed flower:', JSON.stringify(transformedFlowers[0], null, 2));
         
-        setIsNewGarden(false);
-        if (transformedFlowers.length === 0) {
-          const lastFlowers = AsyncStorage.getItem(PLACED_FLOWERS_KEY);
-          if (lastFlowers.length !== 0) setIsNewGarden(true);
-        }
+        // setIsNewGarden(false);
+        // if (transformedFlowers.length === 0) {
+        //   const lastFlowers = AsyncStorage.getItem(PLACED_FLOWERS_KEY);
+        //   if (lastFlowers.length !== 0) setIsNewGarden(true);
+        // }
 
         // 3. 업데이트된 데이터를 AsyncStorage에 저장
         try {

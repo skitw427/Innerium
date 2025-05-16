@@ -42,6 +42,7 @@ router.get('/current', authMiddleware, async (req, res, next) => {
     }
 
     currentGarden = user.currentGarden;
+    let isNewGarden = false;
 
     if (user.currentGarden && user.currentGarden.completed_at) {
       const completedDateValue = user.currentGarden.completed_at;
@@ -78,6 +79,7 @@ router.get('/current', authMiddleware, async (req, res, next) => {
               tree_level: 0, // 초기 나무 레벨
             });
             await user.update({ current_garden_id: currentGarden.garden_id });
+            isNewGarden = true;
 
           } else {
             console.log(`${currentDate}는 ${completedDateValue}보다 하루 이상 크지 않습니다.`);
@@ -116,6 +118,7 @@ router.get('/current', authMiddleware, async (req, res, next) => {
       tree_level: currentGarden.tree_level,
       sky_color: skyColor,
       is_complete: !!currentGarden.completed_at,
+      isNewGarden: isNewGarden,
       flowers: flowersInGarden.map(record => {
         const flowerTypeData = record.chosenFlowerType ? {
           id: record.chosenFlowerType.flower_type_id,

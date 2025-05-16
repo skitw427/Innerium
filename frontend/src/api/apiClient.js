@@ -238,6 +238,7 @@ export const updateUserSettings = (settingsData) => {
  *   tree_level: number, // 현재 나무 레벨 (int)
  *   sky_color: string, // 현재 하늘 색상
  *   is_complete: boolean, // 정원 완성 여부
+ *   isNewGarden: boolean, // 새로운 정원 여부
  *   flowers: Array<{
  *     flower_instance_id: string, // 클라이언트/서버 간 동기화되는 꽃의 고유 ID
  *     flower_type: {

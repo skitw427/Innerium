@@ -63,9 +63,11 @@ const HomeScreen = ({ navigation, route }) => {
       gardenError,
       refreshCurrentGarden,
       completeGarden,
-      isNewGarden
+      isNewGarden,
+      setIsNewGarden,
     } = useGarden();
 
+  const [isScreenReady, setIsScreenReady] = useState(false);
   const { isTransitioning, handleNavigate } = useScreenTransition();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const { isNewAccountJustCreated, clearNewAccountFlag } = useAuth();
@@ -120,26 +122,45 @@ const HomeScreen = ({ navigation, route }) => {
   }, [windowWidth, windowHeight]);
 
   useEffect(() => {
-    console.log("HomeScreen useEffect - currentGardenDetails updated:", currentGardenDetails);
-    if (currentGardenDetails && currentGardenDetails.is_complete) {
-      setIsGardenCompleted(true);
+    if (!isLoadingGarden && !isScreenReady) {
+      console.log('[HomeScreen] GardenContext loaded, setting screen ready.');
+      setIsScreenReady(true);
     }
-    else setIsGardenCompleted(false);
-  }, [currentGardenDetails]);
+    if (gardenError && !isScreenReady) {
+        console.error('[HomeScreen] Error from GardenContext:', gardenError);
+        setIsScreenReady(true);
+    }
+
+  }, [isLoadingGarden, gardenError, isScreenReady]);
 
   useEffect(() => {
-    if (isNewAccountJustCreated) {
+    console.log(" 마운트!! ");
+  }, []);
+
+  useEffect(() => {
+    if (isScreenReady) {
+      console.log("HomeScreen useEffect - currentGardenDetails updated:", currentGardenDetails);
+      if (currentGardenDetails && currentGardenDetails.is_complete) {
+        setIsGardenCompleted(true);
+      }
+      else setIsGardenCompleted(false);
+    }
+  }, [currentGardenDetails, isScreenReady]);
+
+  useEffect(() => {
+    if (isNewAccountJustCreated && isScreenReady) {
       Alert.alert("환영합니다!", "새로운 계정이 생성되었습니다!", [{ text: "확인", onPress: () => clearNewAccountFlag() }], { cancelable: false });
     }
-  }, [isNewAccountJustCreated, clearNewAccountFlag]);
+  }, [isNewAccountJustCreated, clearNewAccountFlag, isScreenReady]);
 
 
   // 정원 완성 처리
   useEffect(() => {
       const handleCompleteGarden = async () => {
+      console.log("정원 완성 처리 호출");
       console.log("isGardenFull:", isGardenFull);
       console.log("isGardenCompleted", isGardenCompleted);
-      if (isGardenFull && !isGardenCompleted) {
+      if (isGardenFull && !isGardenCompleted && isScreenReady) {
         if (!currentGardenDetails?.garden_id) {
               Alert.alert("오류", "현재 정원 정보를 찾을 수 없습니다."); setIsGardenNameModalVisible(false); return;
         }
@@ -166,14 +187,15 @@ const HomeScreen = ({ navigation, route }) => {
     if (!isLoadingGarden && !isCompletingGarden && !isProcessingDiagnosis && !isResultModalVisible) {
       handleCompleteGarden();
     }
-  }, [isGardenFull, isResultModalVisible, isLoadingGarden]);
+  }, [isGardenFull, isResultModalVisible, isLoadingGarden, isScreenReady]);
 
   useEffect(() => {
-    if (!isResultModalVisible && pendingGardenCompletionAlert) {
+    if (!isResultModalVisible && pendingGardenCompletionAlert && isScreenReady) {
+      console.log("정원 완료 모달");
       setIsGardenCompleteAlertVisible(true);
       setPendingGardenCompletionAlert(false);
     }
-  }, [isResultModalVisible, pendingGardenCompletionAlert]);
+  }, [isResultModalVisible, pendingGardenCompletionAlert, isScreenReady]);
 
   const checkDiagnosisStatus = useCallback(async () => {
     try {
@@ -186,43 +208,41 @@ const HomeScreen = ({ navigation, route }) => {
 
   useFocusEffect(
     useCallback(() => {
-      const performFocusActions = async () => {
-        if (isLoadingFlowers) return;
-        let gardenWasReset = false;
-        if (isGardenFull && currentGardenSnapshotTaken) {
-          try {
-            // const lastKnownDateForGarden = await AsyncStorage.getItem(LAST_DIAGNOSIS_DATE_KEY);
-            // const currentAppDateObj = await getAppCurrentDate();
-            // const currentAppDateFormatted = formatDateToYYYYMMDD(currentAppDateObj);
-            // if (lastKnownDateForGarden && lastKnownDateForGarden !== currentAppDateFormatted) {
-            //   setPlacedFlowers([]);
-            //   setCurrentGardenSnapshotTaken(false);
-            //   setIsGardenFull(false);
-            //   await AsyncStorage.removeItem(PLACED_FLOWERS_KEY);
-            //   await AsyncStorage.setItem(CURRENT_GARDEN_SNAPSHOT_TAKEN_KEY, 'false');
-            //   await AsyncStorage.removeItem(LAST_DIAGNOSIS_DATE_KEY);
-            //   gardenWasReset = true;
-            //   setIsGardenResetAlertVisible(true);
-            // }
-          } catch (error) {
-            console.error('[HomeScreen] Error in resetting garden logic on date change:', error);
+      if (isScreenReady) {
+        const checkReset = async () => {
+          try{
+            const lastDate = AsyncStorage.getItem(LAST_DIAGNOSIS_DATE_KEY);
+            const currentDateObj = await getAppCurrentDate();
+            const currentDateFormatted = formatDateToYYYYMMDD(currentDateObj);
+            if (lastDate !== currentDateFormatted) await refreshCurrentGarden();
+          } catch (error) { console.log(error); }
+        };
+        checkReset();
+        console.log("FocusEffect 호출");
+        const performFocusActions = async () => {
+          console.log("isNewGarden:", isNewGarden);
+          let gardenWasReset = false;
+          if (isNewGarden) {
+            gardenWasReset = true;
+            setIsGardenResetAlertVisible(true);
+            setIsNewGarden(false);        
           }
-        }
-        if (gardenWasReset) {
-            setShowEmotionCheckButton(true);
-        } else {
-            await checkDiagnosisStatus();
-        }
-      };
-      performFocusActions();
-      const onBackPress = () => true;
-      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-      return () => {
-        if (subscription && typeof subscription.remove === 'function') {
-          subscription.remove();
-        }
-      };
-    }, [isLoadingFlowers, isGardenFull, currentGardenSnapshotTaken, checkDiagnosisStatus, getAppCurrentDate, formatDateToYYYYMMDD])
+          if (gardenWasReset) {
+              setShowEmotionCheckButton(true);
+          } else {
+              await checkDiagnosisStatus();
+          }
+        };
+        performFocusActions();
+        const onBackPress = () => true;
+        const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+        return () => {
+          if (subscription && typeof subscription.remove === 'function') {
+            subscription.remove();
+          }
+        };
+      }
+    }, [isLoadingFlowers, isGardenFull, checkDiagnosisStatus, getAppCurrentDate, formatDateToYYYYMMDD, isNewGarden, isScreenReady])
   );
 
   // 진단 결과 처리
@@ -263,9 +283,6 @@ const HomeScreen = ({ navigation, route }) => {
           setShowEmotionCheckButton(false);
 
 
-          setIsGardenFull(placedFlowers.length >= MAX_FLOWERS);
-
-
         } catch (error) {
           console.error('[HomeScreen] Error processing diagnosis result or refreshing garden:', error);
           Alert.alert("오류", gardenError || "진단 결과를 처리하는 중 문제가 발생했습니다.");
@@ -278,14 +295,23 @@ const HomeScreen = ({ navigation, route }) => {
     
 
     // 초기 로딩이나 다른 처리 중이 아닐 때만 실행
-    if (!isLoadingGarden && !isCompletingGarden && route.params?.diagnosisResult) {
+    if (!isLoadingGarden && !isCompletingGarden && route.params?.diagnosisResult && isScreenReady ) {
       handleDiagnosisParams();
     }
-  }, [route.params]);
+  }, [route.params, isScreenReady]);
 
+  useEffect(() => {
+    console.log("IsResultModalVisible 변경: ", isResultModalVisible)
+  }, [isResultModalVisible]);
+
+  useEffect(() => {
+    console.log("placedFlowers 변경: ");
+    console.log("현재 꽃 개수: ", placedFlowers.length, MAX_FLOWERS);
+    setIsGardenFull(placedFlowers.length >= MAX_FLOWERS);
+  }, [placedFlowers]);
    
   useEffect(() => {
-    if (Array.isArray(placedFlowers)) {
+    if (Array.isArray(placedFlowers) && isScreenReady) {
       const count = placedFlowers.length; let newSrc = IMAGES.treeImage, newScale = TREE_IMAGE_SCALE_BASE;
       if (count >= 10 && IMAGES.Tree_10) { newSrc = IMAGES.Tree_10; newScale = TREE_IMAGE_SCALE_10; }
       else if (count >= 8 && IMAGES.Tree_8) { newSrc = IMAGES.Tree_8; newScale = TREE_IMAGE_SCALE_8; }
@@ -295,14 +321,14 @@ const HomeScreen = ({ navigation, route }) => {
       if (currentTreeImageSource !== newSrc) setCurrentTreeImageSource(newSrc);
       if (currentTreeImageScalingFactor !== newScale) setCurrentTreeImageScalingFactor(newScale);
     }
-  }, [placedFlowers, currentTreeImageSource, currentTreeImageScalingFactor]);
+  }, [placedFlowers, currentTreeImageSource, currentTreeImageScalingFactor, isScreenReady]);
 
   useEffect(() => {
-    if (isFlowerInfoModalVisible && showChatHistoryInModal) {
+    if (isFlowerInfoModalVisible && showChatHistoryInModal && isScreenReady) {
       if (selectedFlowerData?.messages) { setIsLoadingChatHistory(true); const t = setTimeout(() => setIsLoadingChatHistory(false), 50); return () => clearTimeout(t); }
       else setIsLoadingChatHistory(false);
     } else setIsLoadingChatHistory(false);
-  }, [isFlowerInfoModalVisible, showChatHistoryInModal, selectedFlowerData]);
+  }, [isFlowerInfoModalVisible, showChatHistoryInModal, selectedFlowerData, isScreenReady]);
 
   const handleEmotionCheckPress = () => setIsModalVisible(true);
   const handleConfirmEmotionCheck = () => { setIsModalVisible(false); handleNavigate(navigation, 'DeepDiagnosis'); };
